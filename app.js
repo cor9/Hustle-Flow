@@ -1,4 +1,5 @@
 const STORAGE_KEY = "simple_habit_tracker_v2";
+const LEGACY_STORAGE_KEY = "simple_habit_tracker_v1";
 const MAX_HABITS = 15;
 
 const form = document.getElementById("habit-form");
@@ -44,7 +45,7 @@ nextMonthButton.addEventListener("click", () => {
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { habits: [], checks: {} };
+    if (!raw) return migrateLegacyState();
     const parsed = JSON.parse(raw);
     const habitsRaw = Array.isArray(parsed?.habits) ? parsed.habits : [];
     const checksRaw = parsed?.checks && typeof parsed.checks === "object" ? parsed.checks : {};
@@ -73,6 +74,38 @@ function loadState() {
       if (Object.keys(checks[dateKey]).length === 0) {
         delete checks[dateKey];
       }
+    }
+
+    return { habits, checks };
+  } catch {
+    return migrateLegacyState();
+  }
+}
+
+function migrateLegacyState() {
+  try {
+    const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacyRaw) return { habits: [], checks: {} };
+    const legacy = JSON.parse(legacyRaw);
+    if (!Array.isArray(legacy)) return { habits: [], checks: {} };
+
+    const habits = legacy
+      .filter((h) => h && typeof h.name === "string")
+      .slice(0, MAX_HABITS)
+      .map((h) => ({
+        id: typeof h.id === "string" ? h.id : crypto.randomUUID(),
+        name: h.name.trim(),
+        done: Boolean(h.done),
+      }))
+      .filter((h) => h.name.length > 0);
+
+    const checks = {};
+    for (const habit of habits) {
+      if (habit.done) {
+        if (!checks[todayKey]) checks[todayKey] = {};
+        checks[todayKey][habit.id] = true;
+      }
+      delete habit.done;
     }
 
     return { habits, checks };
