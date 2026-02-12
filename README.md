@@ -4,7 +4,7 @@ Simple personal web app for tracking up to 15 habits with checkmarks.
 
 ## Features
 - Up to 15 habits
-- Checkmark toggle only
+- Calendar-integrated daily checkmarks
 - Remove habits
 - Saves to browser local storage
 

@@ -9,7 +9,27 @@
 <body>
   <main class="app">
     <h1>Habit Tracker</h1>
-    <p class="sub">Simple checkmarks only (max 15 habits)</p>
+    <p class="sub">Calendar + checkmarks only (max 15 habits)</p>
+
+    <section class="calendar" aria-label="Habit calendar">
+      <div class="calendar-top">
+        <button id="prev-month" type="button" class="nav-btn" aria-label="Previous month">Prev</button>
+        <h2 id="month-label"></h2>
+        <button id="next-month" type="button" class="nav-btn" aria-label="Next month">Next</button>
+      </div>
+      <div class="weekdays" aria-hidden="true">
+        <span>Sun</span>
+        <span>Mon</span>
+        <span>Tue</span>
+        <span>Wed</span>
+        <span>Thu</span>
+        <span>Fri</span>
+        <span>Sat</span>
+      </div>
+      <div id="calendar-grid" class="calendar-grid"></div>
+    </section>
+
+    <p id="selected-date" class="selected-date"></p>
 
     <form id="habit-form" class="add-habit">
       <input
