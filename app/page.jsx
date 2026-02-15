@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getSupabaseBrowserClient } from "../lib/supabase/client";
 
 const STORAGE_KEY = "hustle_flow_v2";
 const STATUS_FLOW = ["Backlog", "In Progress", "Review", "Done"];
 const PRIORITY_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+const WORKSPACE_ID = "solo-default";
 
 const defaults = {
   tasks: [
@@ -85,6 +87,16 @@ export default function Page() {
   const [projectForm, setProjectForm] = useState({ name: "", budget: "", health: "Green" });
   const [agentForm, setAgentForm] = useState({ name: "", skills: "", status: "Available" });
   const [assignment, setAssignment] = useState({ taskId: "", agentId: "" });
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiContext, setAiContext] = useState("planning");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiResult, setAiResult] = useState("");
+  const [docFile, setDocFile] = useState(null);
+  const [syncStatus, setSyncStatus] = useState("");
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
   useEffect(() => {
     try {
@@ -376,6 +388,297 @@ export default function Page() {
     URL.revokeObjectURL(url);
   }
 
+  async function syncToSupabase() {
+    if (!supabase) {
+      setSyncStatus("Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      return;
+    }
+
+    setSyncLoading(true);
+    setSyncStatus("Syncing local state to Supabase...");
+
+    try {
+      const boards = state.boards.map((name) => ({
+        id: stableIdFromText(`board-${name}`),
+        workspace_id: WORKSPACE_ID,
+        name,
+      }));
+      const tasks = state.tasks.map((task) => ({
+        id: task.id,
+        workspace_id: WORKSPACE_ID,
+        title: task.title,
+        assignee: task.assignee || "",
+        type: task.type,
+        status: task.status,
+        priority: task.priority,
+        board: task.board,
+        start_date: task.startDate || null,
+        due_date: task.dueDate || null,
+        estimate_hours: Number(task.estimateHours || 0),
+        cost_rate: Number(task.costRate || 0),
+        details: task.details || "",
+        milestone: Boolean(task.milestone),
+        custom_attrs: task.customAttrs || {},
+      }));
+      const documents = state.documents.map((doc) => ({
+        id: doc.id,
+        workspace_id: WORKSPACE_ID,
+        name: doc.name,
+        url: doc.url,
+        storage_path: doc.storagePath || null,
+      }));
+      const wikiPages = state.wiki.map((page) => ({
+        id: page.id,
+        workspace_id: WORKSPACE_ID,
+        title: page.title,
+        content: page.content,
+      }));
+      const agents = state.agents.map((agent) => ({
+        id: agent.id,
+        workspace_id: WORKSPACE_ID,
+        name: agent.name,
+        skills: agent.skills || [],
+        status: agent.status,
+        load: Number(agent.load || 0),
+      }));
+      const projects = state.projects.map((project) => ({
+        id: project.id,
+        workspace_id: WORKSPACE_ID,
+        name: project.name,
+        budget: Number(project.budget || 0),
+        health: project.health,
+      }));
+      const timeEntries = state.timeEntries.map((entry) => ({
+        id: entry.id,
+        workspace_id: WORKSPACE_ID,
+        task_id: entry.taskId,
+        date: entry.date,
+        hours: Number(entry.hours || 0),
+        rate: Number(entry.rate || 0),
+      }));
+
+      await replaceWorkspaceRows(supabase, "boards", boards);
+      await replaceWorkspaceRows(supabase, "tasks", tasks);
+      await replaceWorkspaceRows(supabase, "documents", documents);
+      await replaceWorkspaceRows(supabase, "wiki_pages", wikiPages);
+      await replaceWorkspaceRows(supabase, "agents", agents);
+      await replaceWorkspaceRows(supabase, "projects", projects);
+      await replaceWorkspaceRows(supabase, "time_entries", timeEntries);
+
+      const openClawPayload = {
+        id: WORKSPACE_ID,
+        workspace_id: WORKSPACE_ID,
+        url: state.openClaw.url || "",
+        token: state.openClaw.token || "",
+      };
+      const openClawResult = await supabase.from("openclaw_settings").upsert(openClawPayload);
+      if (openClawResult.error) throw openClawResult.error;
+
+      setSyncStatus("Supabase sync complete.");
+    } catch (error) {
+      setSyncStatus(`Supabase sync failed: ${error.message}`);
+    } finally {
+      setSyncLoading(false);
+    }
+  }
+
+  async function loadFromSupabase() {
+    if (!supabase) {
+      setSyncStatus("Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      return;
+    }
+
+    setSyncLoading(true);
+    setSyncStatus("Loading workspace from Supabase...");
+
+    try {
+      const [boardsRes, tasksRes, docsRes, wikiRes, agentsRes, projectsRes, timeRes, openClawRes] = await Promise.all([
+        supabase.from("boards").select("name").eq("workspace_id", WORKSPACE_ID).order("name", { ascending: true }),
+        supabase.from("tasks").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("documents").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("wiki_pages").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("agents").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("projects").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("time_entries").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("openclaw_settings").select("*").eq("workspace_id", WORKSPACE_ID).maybeSingle(),
+      ]);
+
+      for (const result of [boardsRes, tasksRes, docsRes, wikiRes, agentsRes, projectsRes, timeRes]) {
+        if (result.error) throw result.error;
+      }
+      if (openClawRes.error && openClawRes.error.code !== "PGRST116") throw openClawRes.error;
+
+      const boards = (boardsRes.data || []).map((row) => row.name);
+      const tasks = (tasksRes.data || []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        assignee: row.assignee || "",
+        type: row.type,
+        status: row.status,
+        priority: row.priority,
+        board: row.board,
+        startDate: row.start_date || "",
+        dueDate: row.due_date || "",
+        estimateHours: Number(row.estimate_hours || 0),
+        costRate: Number(row.cost_rate || 0),
+        details: row.details || "",
+        milestone: Boolean(row.milestone),
+        customAttrs: row.custom_attrs || {},
+      }));
+      const documents = (docsRes.data || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        url: row.url,
+        storagePath: row.storage_path || "",
+      }));
+      const wiki = (wikiRes.data || []).map((row) => ({ id: row.id, title: row.title, content: row.content }));
+      const agents = (agentsRes.data || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        skills: Array.isArray(row.skills) ? row.skills : [],
+        status: row.status,
+        load: Number(row.load || 0),
+      }));
+      const projects = (projectsRes.data || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        budget: Number(row.budget || 0),
+        health: row.health,
+      }));
+      const timeEntries = (timeRes.data || []).map((row) => ({
+        id: row.id,
+        taskId: row.task_id,
+        date: row.date,
+        hours: Number(row.hours || 0),
+        rate: Number(row.rate || 0),
+      }));
+
+      setState((prev) => ({
+        ...prev,
+        boards: boards.length ? boards : prev.boards,
+        tasks,
+        documents,
+        wiki,
+        agents,
+        projects,
+        timeEntries,
+        openClaw: openClawRes.data
+          ? { url: openClawRes.data.url || "", token: openClawRes.data.token || "" }
+          : prev.openClaw,
+      }));
+
+      if (boards.length) {
+        setSelectedBoard(boards[0]);
+        setTaskForm((prev) => ({ ...prev, board: boards[0] }));
+      }
+
+      setSyncStatus("Loaded latest data from Supabase.");
+    } catch (error) {
+      setSyncStatus(`Load failed: ${error.message}`);
+    } finally {
+      setSyncLoading(false);
+    }
+  }
+
+  async function uploadDocumentToStorage() {
+    if (!supabase) {
+      setSyncStatus("Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      return;
+    }
+    if (!docFile) {
+      setSyncStatus("Choose a file first.");
+      return;
+    }
+
+    setUploadingDoc(true);
+    setSyncStatus("Uploading file to Supabase Storage...");
+
+    try {
+      const safeName = sanitizeFileName(docFile.name);
+      const storagePath = `${WORKSPACE_ID}/${Date.now()}-${safeName}`;
+      const uploadRes = await supabase.storage.from("documents").upload(storagePath, docFile, { upsert: false });
+      if (uploadRes.error) throw uploadRes.error;
+
+      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
+      const publicUrl = urlData?.publicUrl || "";
+
+      const newDoc = {
+        id: crypto.randomUUID(),
+        name: docForm.name.trim() || docFile.name,
+        url: publicUrl,
+        storagePath,
+      };
+
+      const dbResult = await supabase.from("documents").upsert({
+        id: newDoc.id,
+        workspace_id: WORKSPACE_ID,
+        name: newDoc.name,
+        url: newDoc.url,
+        storage_path: newDoc.storagePath,
+      });
+      if (dbResult.error) throw dbResult.error;
+
+      upsertState((next) => {
+        next.documents.unshift(newDoc);
+      });
+      setDocFile(null);
+      setDocForm({ name: "", url: "" });
+      setSyncStatus("File uploaded and attached to Documents.");
+    } catch (error) {
+      setSyncStatus(`Storage upload failed: ${error.message}`);
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
+  async function runGemini(event) {
+    event.preventDefault();
+    if (!aiPrompt.trim()) return;
+
+    setAiLoading(true);
+    setAiError("");
+    setAiResult("");
+
+    try {
+      const response = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gemini-2.5-flash",
+          context: aiContext,
+          prompt: aiPrompt.trim(),
+          projectSnapshot: {
+            tasks: state.tasks.length,
+            openTasks: state.tasks.filter((task) => task.status !== "Done").length,
+            milestones: milestones.map((m) => ({ title: m.title, dueDate: m.dueDate, status: m.status })),
+            projects: state.projects.map((project) => ({
+              name: project.name,
+              budget: project.budget,
+              health: project.health,
+            })),
+            agents: state.agents.map((agent) => ({
+              name: agent.name,
+              skills: agent.skills,
+              status: agent.status,
+              load: agent.load,
+            })),
+          },
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setAiError(data?.error || "AI request failed.");
+        return;
+      }
+      setAiResult(data.text || "No response text returned.");
+    } catch {
+      setAiError("Network error while contacting Gemini.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   if (!hydrated) {
     return <main className="loading">Loading Hustle Flow...</main>;
   }
@@ -435,10 +738,12 @@ export default function Page() {
         <header className="topbar">
           <div>
             <h2>{titleCase(section.replace("-", " "))}</h2>
-            <p className="muted">Ready. Changes persist in browser storage.</p>
+            <p className="muted">Ready. Changes persist in browser storage{syncStatus ? ` | ${syncStatus}` : "."}</p>
           </div>
           <div className="actions">
             <button className="btn ghost" onClick={applyTemplate}>Apply Product Launch Template</button>
+            <button className="btn ghost" onClick={loadFromSupabase} disabled={syncLoading}>Load Supabase</button>
+            <button className="btn ghost" onClick={syncToSupabase} disabled={syncLoading}>{syncLoading ? "Syncing..." : "Sync Supabase"}</button>
             <button className="btn" onClick={exportJson}>Export Data</button>
           </div>
         </header>
@@ -678,6 +983,15 @@ export default function Page() {
                   <input required placeholder="File URL or path" value={docForm.url} onChange={(e) => setDocForm({ ...docForm, url: e.target.value })} />
                   <button className="btn" type="submit">Add Document</button>
                 </form>
+                <div className="inline-form">
+                  <input
+                    type="file"
+                    onChange={(event) => setDocFile(event.target.files?.[0] || null)}
+                  />
+                  <button className="btn ghost" type="button" onClick={uploadDocumentToStorage} disabled={uploadingDoc}>
+                    {uploadingDoc ? "Uploading..." : "Upload to Storage"}
+                  </button>
+                </div>
                 <ul className="list">
                   {state.documents.length ? state.documents.map((doc) => (
                     <li key={doc.id} className="item"><strong>{doc.name}</strong><br /><a href={doc.url} target="_blank" rel="noreferrer">{doc.url}</a></li>
@@ -795,6 +1109,29 @@ export default function Page() {
                       .map((task) => <div key={task.id} className="item"><strong>{task.title}</strong><br /><span className="muted">Assigned to {task.assignee} ({task.status})</span></div>)
                   ) : <div className="item">No tasks currently assigned to AI agents.</div>}
                 </div>
+
+                <hr className="divider" />
+                <h3>Gemini Flash 2.5</h3>
+                <form className="stack-form" onSubmit={runGemini}>
+                  <select value={aiContext} onChange={(event) => setAiContext(event.target.value)}>
+                    <option value="planning">Planning</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="scheduling">Scheduling</option>
+                    <option value="research">Research</option>
+                  </select>
+                  <textarea
+                    rows={4}
+                    placeholder="Ask Gemini to plan a sprint, draft campaign strategy, estimate schedule, or research competitors."
+                    value={aiPrompt}
+                    onChange={(event) => setAiPrompt(event.target.value)}
+                    required
+                  />
+                  <button className="btn" type="submit" disabled={aiLoading}>
+                    {aiLoading ? "Thinking..." : "Run Gemini"}
+                  </button>
+                </form>
+                {aiError ? <div className="item error">{aiError}</div> : null}
+                {aiResult ? <div className="item ai-result"><pre>{aiResult}</pre></div> : null}
               </article>
             </div>
           </section>
@@ -861,4 +1198,26 @@ function dayDiff(start, end) {
 
 function titleCase(value) {
   return value.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+async function replaceWorkspaceRows(supabase, tableName, rows) {
+  const deleteResult = await supabase.from(tableName).delete().eq("workspace_id", WORKSPACE_ID);
+  if (deleteResult.error) throw deleteResult.error;
+  if (!rows.length) return;
+  const insertResult = await supabase.from(tableName).insert(rows);
+  if (insertResult.error) throw insertResult.error;
+}
+
+function sanitizeFileName(value) {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
+}
+
+function stableIdFromText(input) {
+  const encoded = new TextEncoder().encode(input);
+  let hash = 0;
+  for (const byte of encoded) {
+    hash = (hash << 5) - hash + byte;
+    hash |= 0;
+  }
+  return `board-${Math.abs(hash)}`;
 }

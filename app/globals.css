@@ -528,6 +528,24 @@ textarea {
   gap: 0.5rem;
 }
 
+.divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1rem 0;
+}
+
+.ai-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font: 500 0.88rem/1.5 "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.error {
+  border-color: #f3a2ad;
+  background: #fff1f4;
+  color: #9e2039;
+}
+
 .task-gallery {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
