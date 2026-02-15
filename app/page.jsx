@@ -712,6 +712,8 @@ export default function Page() {
           ))}
         </nav>
 
+        <a className="btn ghost full guide-link" href="/guide">Open User Guide</a>
+
         <section className="panel small">
           <h3>OpenClaw</h3>
           <label className="field-label" htmlFor="openclaw-url">Server URL</label>
@@ -741,6 +743,7 @@ export default function Page() {
             <p className="muted">Ready. Changes persist in browser storage{syncStatus ? ` | ${syncStatus}` : "."}</p>
           </div>
           <div className="actions">
+            <a className="btn ghost" href="/guide">User Guide</a>
             <button className="btn ghost" onClick={applyTemplate}>Apply Product Launch Template</button>
             <button className="btn ghost" onClick={loadFromSupabase} disabled={syncLoading}>Load Supabase</button>
             <button className="btn ghost" onClick={syncToSupabase} disabled={syncLoading}>{syncLoading ? "Syncing..." : "Sync Supabase"}</button>
