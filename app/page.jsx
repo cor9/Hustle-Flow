@@ -783,9 +783,16 @@ export default function Page() {
         <header className="hf-topbar">
           <div>
             <h2>{titleCase(section.replace("-", " "))}</h2>
-            <p className="muted">
-              {syncStatus || "Optimistic interactions enabled. Card moves update instantly."}
-            </p>
+            <div className="hf-row-tight">
+              <p className="muted">
+                {syncStatus || "Ready."}
+              </p>
+              {summary.runningAgents > 0 && (
+                <span className="hf-agent-active" style={{ fontSize: '0.8rem', padding: '0.2rem 0.6rem' }}>
+                  Running {summary.runningAgents} Agent{summary.runningAgents > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
           </div>
           <div className="hf-actions">
             <a className="btn ghost" href="/guide">User Guide</a>
@@ -845,41 +852,41 @@ export default function Page() {
                 </div>
               </div>
 
-              <form className="hf-composer" onSubmit={createActionItem}>
-                <input
-                  value={composer.title}
-                  onChange={(event) => setComposer((prev) => ({ ...prev, title: event.target.value }))}
-                  placeholder="New Action Item title"
-                  required
-                />
-                <input
-                  value={composer.projectTag}
-                  onChange={(event) => setComposer((prev) => ({ ...prev, projectTag: event.target.value }))}
-                  placeholder="Project Tag"
-                />
-                <select value={composer.status} onChange={(event) => setComposer((prev) => ({ ...prev, status: event.target.value }))}>
-                  {STATUS_COLUMNS.map((status) => <option key={status}>{status}</option>)}
-                </select>
-                <select value={composer.priority} onChange={(event) => setComposer((prev) => ({ ...prev, priority: event.target.value }))}>
-                  {PRIORITY_LEVELS.map((priority) => <option key={priority}>{priority}</option>)}
-                </select>
-                <input
-                  type="date"
-                  value={composer.dueDate}
-                  onChange={(event) => setComposer((prev) => ({ ...prev, dueDate: event.target.value }))}
-                />
-                <input
-                  value={composer.imageUrl}
-                  onChange={(event) => setComposer((prev) => ({ ...prev, imageUrl: event.target.value }))}
-                  placeholder="Image URL (optional for Gallery)"
-                />
-                <textarea
-                  rows={2}
-                  value={composer.description}
-                  onChange={(event) => setComposer((prev) => ({ ...prev, description: event.target.value }))}
-                  placeholder="Short description"
-                />
-                <button className="btn" type="submit">Create Action Item</button>
+              <form className="hf-composer" onSubmit={createActionItem} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 2fr) 1fr 1fr', gap: '0.75rem' }}>
+                  <input
+                    value={composer.title}
+                    onChange={(event) => setComposer((prev) => ({ ...prev, title: event.target.value }))}
+                    placeholder="What needs to be done?"
+                    required
+                    style={{ gridColumn: 'span 1' }}
+                  />
+                  <select value={composer.status} onChange={(event) => setComposer((prev) => ({ ...prev, status: event.target.value }))}>
+                    {STATUS_COLUMNS.map((status) => <option key={status}>{status}</option>)}
+                  </select>
+                  <select value={composer.priority} onChange={(event) => setComposer((prev) => ({ ...prev, priority: event.target.value }))}>
+                    {PRIORITY_LEVELS.map((priority) => <option key={priority}>{priority}</option>)}
+                  </select>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '0.75rem' }}>
+                   <input
+                    value={composer.projectTag}
+                    onChange={(event) => setComposer((prev) => ({ ...prev, projectTag: event.target.value }))}
+                    placeholder="Project / Tag"
+                  />
+                  <input
+                    type="date"
+                    value={composer.dueDate}
+                    onChange={(event) => setComposer((prev) => ({ ...prev, dueDate: event.target.value }))}
+                  />
+                  <input
+                    value={composer.imageUrl}
+                    onChange={(event) => setComposer((prev) => ({ ...prev, imageUrl: event.target.value }))}
+                    placeholder="Image URL"
+                  />
+                  <button className="btn" type="submit" style={{ paddingLeft: '1.5rem', paddingRight: '1.5rem' }}>Add Task</button>
+                </div>
               </form>
 
               <div className="hf-row">
