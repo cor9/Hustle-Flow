@@ -3,49 +3,284 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Habit Checkmarks</title>
+  <title>Hustle Flow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="app">
-    <h1>Habit Tracker</h1>
-    <p class="sub">Calendar + checkmarks only (max 15 habits)</p>
-
-    <section class="calendar" aria-label="Habit calendar">
-      <div class="calendar-top">
-        <button id="prev-month" type="button" class="nav-btn" aria-label="Previous month">Prev</button>
-        <h2 id="month-label"></h2>
-        <button id="next-month" type="button" class="nav-btn" aria-label="Next month">Next</button>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand brand-charcoal">
+        <img
+          class="brand-logo"
+          src="assets/hustle-flow-logo.png"
+          alt="Hustle Flow logo"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='grid';"
+        />
+        <span class="brand-badge logo-fallback">HF</span>
       </div>
-      <div class="weekdays" aria-hidden="true">
-        <span>Sun</span>
-        <span>Mon</span>
-        <span>Tue</span>
-        <span>Wed</span>
-        <span>Thu</span>
-        <span>Fri</span>
-        <span>Sat</span>
+      <div class="brand-copy">
+        <h1>Hustle Flow</h1>
+        <p>Solo PM + AI Agent Ops</p>
       </div>
-      <div id="calendar-grid" class="calendar-grid"></div>
-    </section>
 
-    <p id="selected-date" class="selected-date"></p>
+      <nav class="nav" aria-label="Primary">
+        <button class="nav-btn active" data-section="dashboard">Dashboard</button>
+        <button class="nav-btn" data-section="work-packages">Work Packages</button>
+        <button class="nav-btn" data-section="boards">Agile Boards</button>
+        <button class="nav-btn" data-section="timeline">Gantt & Roadmap</button>
+        <button class="nav-btn" data-section="calendar">Calendar</button>
+        <button class="nav-btn" data-section="docs">Documents & Wiki</button>
+        <button class="nav-btn" data-section="finance">Time + Cost</button>
+        <button class="nav-btn" data-section="portfolio">Portfolios</button>
+        <button class="nav-btn" data-section="agents">AI Agents</button>
+      </nav>
 
-    <form id="habit-form" class="add-habit">
-      <input
-        id="habit-input"
-        type="text"
-        maxlength="40"
-        placeholder="Add a habit"
-        autocomplete="off"
-        required
-      />
-      <button type="submit">Add</button>
-    </form>
+      <section class="panel small">
+        <h3>OpenClaw</h3>
+        <label class="field-label" for="openclaw-url">Server URL</label>
+        <input id="openclaw-url" type="url" placeholder="https://agents.local" />
+        <label class="field-label" for="openclaw-token">Access Token</label>
+        <input id="openclaw-token" type="password" placeholder="ocw_..." />
+        <button id="save-openclaw" class="btn full">Save Integration</button>
+      </section>
+    </aside>
 
-    <p id="count" class="count"></p>
-    <ul id="habit-list" class="habit-list"></ul>
-  </main>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h2 id="section-title">Dashboard</h2>
+          <p id="live-sync" class="muted">Ready. Changes sync across browser tabs.</p>
+        </div>
+        <div class="actions">
+          <button id="seed-template" class="btn ghost">Apply Product Launch Template</button>
+          <button id="export-json" class="btn">Export Data</button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="section active">
+        <div class="stats" id="stats-grid"></div>
+
+        <div class="grid two">
+          <article class="panel">
+            <h3>Upcoming Milestones</h3>
+            <ul id="milestone-list" class="list"></ul>
+          </article>
+          <article class="panel">
+            <h3>Weekly Load Planner</h3>
+            <div id="team-planner" class="planner"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="work-packages" class="section">
+        <article class="panel">
+          <h3>Create Work Package</h3>
+          <form id="task-form" class="grid-form">
+            <input id="task-title" required placeholder="Title" />
+            <input id="task-assignee" placeholder="Assignee or AI Agent" />
+            <select id="task-type">
+              <option>Feature</option>
+              <option>Task</option>
+              <option>Bug</option>
+              <option>Risk</option>
+            </select>
+            <select id="task-status">
+              <option>Backlog</option>
+              <option>In Progress</option>
+              <option>Review</option>
+              <option>Done</option>
+            </select>
+            <select id="task-priority">
+              <option>Low</option>
+              <option selected>Medium</option>
+              <option>High</option>
+              <option>Critical</option>
+            </select>
+            <select id="task-board"></select>
+            <input id="task-start" type="date" />
+            <input id="task-due" type="date" />
+            <input id="task-estimate" type="number" min="0" step="0.5" placeholder="Estimate hours" />
+            <input id="task-cost-rate" type="number" min="0" step="1" placeholder="Hourly $ rate" />
+            <input id="task-custom" placeholder="Custom attrs (e.g. client:Acme,channel:SEO)" />
+            <label class="inline-check">
+              <input id="task-milestone" type="checkbox" /> Milestone
+            </label>
+            <textarea id="task-details" rows="2" placeholder="Description"></textarea>
+            <button class="btn" type="submit">Add Work Package</button>
+          </form>
+        </article>
+
+        <article class="panel">
+          <div class="row-wrap">
+            <h3>Views</h3>
+            <div class="segmented" id="task-view-switcher">
+              <button class="seg-btn active" data-view="table">Table</button>
+              <button class="seg-btn" data-view="calendar">Calendar</button>
+              <button class="seg-btn" data-view="gallery">Gallery</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <input id="search-input" placeholder="Search title or assignee" />
+            <select id="filter-status"><option value="">All statuses</option></select>
+            <select id="filter-priority"><option value="">All priorities</option></select>
+            <select id="sort-by">
+              <option value="dueDate">Sort: Due date</option>
+              <option value="priority">Sort: Priority</option>
+              <option value="status">Sort: Status</option>
+              <option value="title">Sort: Title</option>
+            </select>
+          </div>
+
+          <div id="task-view-table" class="task-view"></div>
+          <div id="task-view-calendar" class="task-view hidden"></div>
+          <div id="task-view-gallery" class="task-view hidden"></div>
+        </article>
+      </section>
+
+      <section id="boards" class="section">
+        <article class="panel">
+          <div class="row-wrap">
+            <h3>Kanban + Action Boards</h3>
+            <form id="board-form" class="inline-form">
+              <input id="board-name" maxlength="40" placeholder="New board name" required />
+              <button type="submit" class="btn">Create Board</button>
+            </form>
+          </div>
+          <div class="row-wrap">
+            <label class="field-label" for="board-selector">Board</label>
+            <select id="board-selector"></select>
+          </div>
+          <div id="kanban" class="kanban"></div>
+        </article>
+      </section>
+
+      <section id="timeline" class="section">
+        <div class="grid two">
+          <article class="panel">
+            <h3>Gantt</h3>
+            <div id="gantt" class="gantt"></div>
+          </article>
+          <article class="panel">
+            <h3>Roadmap</h3>
+            <div id="roadmap" class="roadmap"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="calendar" class="section">
+        <article class="panel">
+          <div class="row-wrap">
+            <h3>Project Calendar</h3>
+            <div>
+              <button id="prev-month" class="btn ghost" type="button">Prev</button>
+              <button id="next-month" class="btn ghost" type="button">Next</button>
+            </div>
+          </div>
+          <p id="calendar-label" class="muted"></p>
+          <div class="month-grid-head">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+          </div>
+          <div id="month-grid" class="month-grid"></div>
+        </article>
+      </section>
+
+      <section id="docs" class="section">
+        <div class="grid two">
+          <article class="panel">
+            <h3>Documents</h3>
+            <form id="document-form" class="inline-form">
+              <input id="doc-name" required placeholder="Document name" />
+              <input id="doc-url" required placeholder="File URL or path" />
+              <button class="btn" type="submit">Add Document</button>
+            </form>
+            <ul id="document-list" class="list"></ul>
+          </article>
+
+          <article class="panel">
+            <h3>Wiki</h3>
+            <form id="wiki-form" class="stack-form">
+              <input id="wiki-title" required placeholder="Wiki page title" />
+              <textarea id="wiki-content" rows="4" required placeholder="Notes, SOPs, decisions, runbooks..."></textarea>
+              <button class="btn" type="submit">Save Wiki Page</button>
+            </form>
+            <ul id="wiki-list" class="list"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="finance" class="section">
+        <div class="grid two">
+          <article class="panel">
+            <h3>Time Tracking</h3>
+            <form id="time-form" class="inline-form">
+              <select id="time-task"></select>
+              <input id="time-date" type="date" required />
+              <input id="time-hours" type="number" min="0.25" step="0.25" required placeholder="Hours" />
+              <input id="time-rate" type="number" min="0" step="1" required placeholder="$/hour" />
+              <button class="btn" type="submit">Log Time</button>
+            </form>
+            <ul id="time-list" class="list"></ul>
+          </article>
+
+          <article class="panel">
+            <h3>Cost Tracking & Budgets</h3>
+            <form id="budget-form" class="inline-form">
+              <input id="project-name" required placeholder="Project name" />
+              <input id="project-budget" type="number" min="0" step="100" required placeholder="Budget" />
+              <select id="project-health">
+                <option>Green</option>
+                <option>Yellow</option>
+                <option>Red</option>
+              </select>
+              <button class="btn" type="submit">Upsert Project</button>
+            </form>
+            <div id="budget-summary"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="portfolio" class="section">
+        <article class="panel">
+          <h3>Portfolio Overview</h3>
+          <div id="portfolio-grid" class="cards"></div>
+        </article>
+      </section>
+
+      <section id="agents" class="section">
+        <div class="grid two">
+          <article class="panel">
+            <h3>AI Agent Users</h3>
+            <form id="agent-form" class="inline-form">
+              <input id="agent-name" required placeholder="Agent name" />
+              <input id="agent-skills" required placeholder="Skills (comma-separated)" />
+              <select id="agent-status">
+                <option>Available</option>
+                <option>Busy</option>
+                <option>Offline</option>
+              </select>
+              <button class="btn" type="submit">Add Agent</button>
+            </form>
+            <ul id="agent-list" class="list"></ul>
+          </article>
+
+          <article class="panel">
+            <h3>Agent Command Center</h3>
+            <p class="muted">Assign work packages to AI agents for planning, marketing, research, scheduling, and execution support.</p>
+            <form id="agent-assignment-form" class="inline-form">
+              <select id="assign-task"></select>
+              <select id="assign-agent"></select>
+              <button class="btn" type="submit">Assign</button>
+            </form>
+            <div id="agent-ops" class="ops-box"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="app.js"></script>
 </body>
