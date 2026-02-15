@@ -143,40 +143,45 @@ textarea:focus {
 }
 
 /* Sidebar */
+/* Sidebar */
 .hf-sidebar {
   /* fixed width handled by grid */
   background: linear-gradient(180deg, #0e172a, #111e37);
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
-  gap: 2rem;
+  padding: 1.2rem;
+  gap: 1.2rem;
   box-shadow: 5px 0 30px rgba(0, 0, 0, 0.1);
   overflow-y: auto;
 }
 
 .hf-brand-card {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  gap: 1rem;
-  padding: 1.5rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 0.5rem;
+  padding: 0.5rem;
+  /* Removed distinctive card background to reduce "wasted box" feel, or keep it subtle but tight */
+  background: transparent;
+  border: none;
 }
 
 .hf-logo {
-  width: 80px;
-  /* LARGER LOGO */
-  height: 80px;
+  width: 100%;
+  max-width: 180px;
+  /* Larger max-width */
+  height: auto;
   object-fit: contain;
+  /* Negative margins to pull it tighter if image has built-in padding, 
+     but assuming standard image, just letting it grow */
 }
 
 .hf-brand-copy h1 {
   font-family: var(--font-space);
-  font-size: 1.6rem;
-  /* LARGER FONT */
+  font-size: 1.35rem;
+  /* Balanced Header */
   font-weight: 700;
   margin: 0;
   letter-spacing: 0.02em;
@@ -184,26 +189,25 @@ textarea:focus {
 }
 
 .hf-brand-copy p {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  margin: 0.3rem 0 0;
+  margin: 0.2rem 0 0;
 }
 
 .hf-nav {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.5rem;
 }
 
 .hf-nav-btn {
   background: transparent;
   border: 1px solid transparent;
   text-align: left;
-  padding: 0.85rem 1rem;
-  /* Larger touch target */
+  padding: 0.75rem 1rem;
   border-radius: var(--radius-sm);
   color: #c7d7f0;
-  font-size: 1.1rem;
-  /* Bigger nav font */
+  font-size: 1rem;
+  /* Balanced Nav Font */
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -242,7 +246,7 @@ textarea:focus {
 
 .hf-topbar h2 {
   font-family: var(--font-space);
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   /* Large headers */
   font-weight: 700;
   margin: 0;
