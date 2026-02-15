@@ -3,99 +3,169 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
 
-const STORAGE_KEY = "hustle_flow_v2";
-const STATUS_FLOW = ["Backlog", "In Progress", "Review", "Done"];
-const PRIORITY_ORDER = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+const STORAGE_KEY = "hustle_flow_simplified_v1";
 const WORKSPACE_ID = "solo-default";
+const STATUS_COLUMNS = ["Backlog", "To Do", "Doing", "Done"];
+const PRIORITY_LEVELS = ["Low", "Medium", "High", "Critical"];
+
+const defaultSkills = [
+  {
+    id: crypto.randomUUID(),
+    name: "OpenClaw Web Search",
+    description: "Collect sources, summarize findings, and return link-backed notes.",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "OpenClaw Planner",
+    description: "Build scoped execution plans with dependencies and time blocks.",
+  },
+  {
+    id: crypto.randomUUID(),
+    name: "OpenClaw Copy Draft",
+    description: "Generate campaign copy, headlines, and launch messaging drafts.",
+  },
+];
 
 const defaults = {
-  tasks: [
+  actionItems: [
     {
       id: crypto.randomUUID(),
-      title: "Define launch scope",
-      assignee: "Founder",
-      type: "Task",
-      status: "In Progress",
+      title: "Ship onboarding walkthrough",
+      projectTag: "Product",
+      status: "Doing",
       priority: "High",
-      board: "Core",
-      startDate: keyForOffset(-2),
-      dueDate: keyForOffset(4),
-      estimateHours: 8,
-      costRate: 95,
-      details: "Finalize MVP boundary for v1 release.",
-      milestone: false,
-      customAttrs: { stream: "planning" },
+      assignee: "Founder",
+      dueDate: dateOffset(4),
+      startDate: dateOffset(-1),
+      imageUrl: "https://images.unsplash.com/photo-1523475472560-d2df97ec485c?auto=format&fit=crop&w=1200&q=80",
+      description: "Design a simple first-run checklist for new users.",
+      advanced: {
+        estimateHours: 8,
+        costRate: 95,
+        budgetCap: 1200,
+        portfolioTag: "Core",
+        workload: "Medium",
+        riskLevel: "Low",
+      },
+      customAttrs: { stream: "onboarding", channel: "web" },
+      agent: {
+        skill: "OpenClaw Planner",
+        status: "running",
+        log: [
+          {
+            id: crypto.randomUUID(),
+            text: "Planner started: sequencing story points and dependencies.",
+            time: new Date().toISOString(),
+          },
+        ],
+        output: "",
+        lastRunAt: "",
+      },
     },
     {
       id: crypto.randomUUID(),
-      title: "Beta milestone",
-      assignee: "FlowBot",
-      type: "Feature",
-      status: "Backlog",
+      title: "Research competitor pricing",
+      projectTag: "Growth",
+      status: "To Do",
       priority: "Critical",
-      board: "Core",
-      startDate: keyForOffset(3),
-      dueDate: keyForOffset(14),
-      estimateHours: 12,
-      costRate: 120,
-      details: "Public beta package.",
-      milestone: true,
-      customAttrs: { release: "0.1" },
+      assignee: "",
+      dueDate: dateOffset(6),
+      startDate: dateOffset(1),
+      imageUrl: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
+      description: "Build side-by-side pricing matrix and identify positioning gaps.",
+      advanced: {
+        estimateHours: 6,
+        costRate: 110,
+        budgetCap: 1500,
+        portfolioTag: "Go-To-Market",
+        workload: "Medium",
+        riskLevel: "Medium",
+      },
+      customAttrs: { market: "US", output: "matrix" },
+      agent: {
+        skill: "OpenClaw Web Search",
+        status: "idle",
+        log: [],
+        output: "",
+        lastRunAt: "",
+      },
+    },
+    {
+      id: crypto.randomUUID(),
+      title: "Draft launch hero visuals",
+      projectTag: "Creative",
+      status: "Backlog",
+      priority: "Medium",
+      assignee: "",
+      dueDate: dateOffset(9),
+      startDate: dateOffset(3),
+      imageUrl: "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1200&q=80",
+      description: "Create three visual directions for landing page hero.",
+      advanced: {
+        estimateHours: 10,
+        costRate: 85,
+        budgetCap: 1800,
+        portfolioTag: "Brand",
+        workload: "High",
+        riskLevel: "Low",
+      },
+      customAttrs: { assetType: "image", campaign: "launch" },
+      agent: {
+        skill: "OpenClaw Copy Draft",
+        status: "idle",
+        log: [],
+        output: "",
+        lastRunAt: "",
+      },
     },
   ],
-  boards: ["Core", "Marketing"],
-  documents: [{ id: crypto.randomUUID(), name: "MVP PRD", url: "docs/mvp-prd.md" }],
-  wiki: [{ id: crypto.randomUUID(), title: "Operating Rhythm", content: "Weekly planning on Monday, review Friday." }],
-  agents: [
-    { id: crypto.randomUUID(), name: "FlowBot", skills: ["planning", "research"], status: "Available", load: 35 },
-    { id: crypto.randomUUID(), name: "MarketPilot", skills: ["marketing", "content"], status: "Busy", load: 75 },
+  documents: [],
+  wiki: [
+    {
+      id: crypto.randomUUID(),
+      title: "Operating cadence",
+      content: "Daily board review at 9:00. Weekly roadmap review every Friday.",
+    },
   ],
-  projects: [{ id: crypto.randomUUID(), name: "Hustle Flow Core", budget: 40000, health: "Green" }],
-  timeEntries: [],
-  openClaw: { url: "", token: "" },
+  openClaw: {
+    url: "",
+    token: "",
+  },
+  agentSkills: defaultSkills,
 };
 
 export default function Page() {
   const [hydrated, setHydrated] = useState(false);
   const [state, setState] = useState(defaults);
   const [section, setSection] = useState("dashboard");
-  const [taskView, setTaskView] = useState("table");
-  const [selectedBoard, setSelectedBoard] = useState(defaults.boards[0]);
+  const [boardView, setBoardView] = useState("kanban");
+  const [search, setSearch] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState("");
+  const [detailTab, setDetailTab] = useState("overview");
+  const [expandedCards, setExpandedCards] = useState({});
+  const [customAttrsText, setCustomAttrsText] = useState("");
+
   const [monthView, setMonthView] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
 
-  const [taskForm, setTaskForm] = useState({
+  const [composer, setComposer] = useState({
     title: "",
-    assignee: "",
-    type: "Feature",
+    projectTag: "Product",
     status: "Backlog",
     priority: "Medium",
-    board: defaults.boards[0],
-    startDate: "",
     dueDate: "",
-    estimateHours: "",
-    costRate: "",
-    custom: "",
-    milestone: false,
-    details: "",
+    imageUrl: "",
+    description: "",
   });
 
-  const [filters, setFilters] = useState({ search: "", status: "", priority: "", sortBy: "dueDate" });
-  const [boardName, setBoardName] = useState("");
-  const [docForm, setDocForm] = useState({ name: "", url: "" });
+  const [documentForm, setDocumentForm] = useState({ name: "", url: "" });
   const [wikiForm, setWikiForm] = useState({ title: "", content: "" });
-  const [timeForm, setTimeForm] = useState({ taskId: "", date: "", hours: "", rate: "" });
-  const [projectForm, setProjectForm] = useState({ name: "", budget: "", health: "Green" });
-  const [agentForm, setAgentForm] = useState({ name: "", skills: "", status: "Available" });
-  const [assignment, setAssignment] = useState({ taskId: "", agentId: "" });
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [aiContext, setAiContext] = useState("planning");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState("");
-  const [aiResult, setAiResult] = useState("");
+  const [skillForm, setSkillForm] = useState({ name: "", description: "" });
   const [docFile, setDocFile] = useState(null);
-  const [syncStatus, setSyncStatus] = useState("");
+
   const [syncLoading, setSyncLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("");
   const [uploadingDoc, setUploadingDoc] = useState(false);
+
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
   useEffect(() => {
@@ -103,15 +173,16 @@ export default function Page() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        const next = {
+        const merged = {
           ...defaults,
           ...parsed,
-          boards: parsed?.boards?.length ? parsed.boards : defaults.boards,
-          tasks: Array.isArray(parsed?.tasks) ? parsed.tasks : defaults.tasks,
+          actionItems: Array.isArray(parsed?.actionItems) ? parsed.actionItems : defaults.actionItems,
+          documents: Array.isArray(parsed?.documents) ? parsed.documents : [],
+          wiki: Array.isArray(parsed?.wiki) ? parsed.wiki : [],
+          agentSkills: Array.isArray(parsed?.agentSkills) && parsed.agentSkills.length ? parsed.agentSkills : defaultSkills,
+          openClaw: parsed?.openClaw || defaults.openClaw,
         };
-        setState(next);
-        setSelectedBoard(next.boards[0]);
-        setTaskForm((prev) => ({ ...prev, board: next.boards[0] }));
+        setState(merged);
       }
     } catch {
       setState(defaults);
@@ -122,73 +193,54 @@ export default function Page() {
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state, hydrated]);
+  }, [hydrated, state]);
+
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return state.actionItems;
+    return state.actionItems.filter((item) => {
+      return (
+        item.title.toLowerCase().includes(query) ||
+        item.projectTag.toLowerCase().includes(query) ||
+        (item.description || "").toLowerCase().includes(query)
+      );
+    });
+  }, [search, state.actionItems]);
+
+  const selectedItem = useMemo(
+    () => state.actionItems.find((item) => item.id === selectedItemId) || null,
+    [selectedItemId, state.actionItems]
+  );
 
   useEffect(() => {
-    if (!state.boards.includes(selectedBoard)) {
-      setSelectedBoard(state.boards[0] || "Core");
+    if (!selectedItem) {
+      setCustomAttrsText("");
+      return;
     }
-  }, [state.boards, selectedBoard]);
+    setCustomAttrsText(formatCustomAttrs(selectedItem.customAttrs));
+  }, [selectedItem]);
 
-  const filteredTasks = useMemo(() => {
-    const query = filters.search.toLowerCase().trim();
-    const list = state.tasks.filter((task) => {
-      const mq = !query || task.title.toLowerCase().includes(query) || (task.assignee || "").toLowerCase().includes(query);
-      const ms = !filters.status || task.status === filters.status;
-      const mp = !filters.priority || task.priority === filters.priority;
-      return mq && ms && mp;
-    });
-    return list.sort((a, b) => {
-      if (filters.sortBy === "priority") return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-      if (filters.sortBy === "dueDate") return (a.dueDate || "9999-99-99").localeCompare(b.dueDate || "9999-99-99");
-      return String(a[filters.sortBy] || "").localeCompare(String(b[filters.sortBy] || ""));
-    });
-  }, [state.tasks, filters]);
-
-  const totalCost = useMemo(
-    () => state.timeEntries.reduce((sum, entry) => sum + Number(entry.hours) * Number(entry.rate), 0),
-    [state.timeEntries]
-  );
-  const totalHours = useMemo(() => state.timeEntries.reduce((sum, entry) => sum + Number(entry.hours), 0), [state.timeEntries]);
-
-  const milestones = useMemo(
-    () => state.tasks.filter((task) => task.milestone).sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")),
-    [state.tasks]
-  );
-
-  const assigneeLoads = useMemo(() => {
-    const map = {};
-    for (const task of state.tasks) {
-      const key = task.assignee || "Unassigned";
-      if (!map[key]) map[key] = { count: 0, hours: 0 };
-      map[key].count += 1;
-      map[key].hours += Number(task.estimateHours || 0);
-    }
-    return Object.entries(map);
-  }, [state.tasks]);
-
-  const tasksByDate = useMemo(() => {
-    const map = {};
-    for (const task of state.tasks) {
-      if (!task.dueDate) continue;
-      if (!map[task.dueDate]) map[task.dueDate] = [];
-      map[task.dueDate].push(task);
-    }
-    return map;
-  }, [state.tasks]);
-
-  const taskDateKeys = useMemo(() => Object.keys(tasksByDate).sort(), [tasksByDate]);
+  const summary = useMemo(() => {
+    const total = state.actionItems.length;
+    const doing = state.actionItems.filter((item) => item.status === "Doing").length;
+    const done = state.actionItems.filter((item) => item.status === "Done").length;
+    const runningAgents = state.actionItems.filter((item) => item.agent?.status === "running").length;
+    const dueSoon = state.actionItems.filter((item) => isDueWithinDays(item.dueDate, 7) && item.status !== "Done").length;
+    return { total, doing, done, runningAgents, dueSoon };
+  }, [state.actionItems]);
 
   const calendarCells = useMemo(() => {
     const first = new Date(monthView.getFullYear(), monthView.getMonth(), 1);
     const offset = first.getDay();
     first.setDate(first.getDate() - offset);
-    return Array.from({ length: 42 }, (_, idx) => {
-      const date = new Date(first.getFullYear(), first.getMonth(), first.getDate() + idx);
+
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(first.getFullYear(), first.getMonth(), first.getDate() + index);
       const key = keyFromDate(date);
-      return { date, key, tasks: (tasksByDate[key] || []).slice(0, 3) };
+      const items = state.actionItems.filter((item) => item.dueDate === key);
+      return { date, key, items };
     });
-  }, [monthView, tasksByDate]);
+  }, [monthView, state.actionItems]);
 
   function upsertState(mutator) {
     setState((prev) => {
@@ -198,391 +250,250 @@ export default function Page() {
     });
   }
 
-  function handleCreateTask(event) {
-    event.preventDefault();
-    if (!taskForm.title.trim()) return;
+  function updateActionItem(itemId, mutator) {
+    upsertState((next) => {
+      const target = next.actionItems.find((item) => item.id === itemId);
+      if (!target) return;
+      mutator(target);
+    });
+  }
 
-    const task = {
+  function createActionItem(event) {
+    event.preventDefault();
+    if (!composer.title.trim()) return;
+
+    const newItem = {
       id: crypto.randomUUID(),
-      title: taskForm.title.trim(),
-      assignee: taskForm.assignee.trim(),
-      type: taskForm.type,
-      status: taskForm.status,
-      priority: taskForm.priority,
-      board: taskForm.board,
-      startDate: taskForm.startDate,
-      dueDate: taskForm.dueDate,
-      estimateHours: Number(taskForm.estimateHours || 0),
-      costRate: Number(taskForm.costRate || 0),
-      details: taskForm.details.trim(),
-      milestone: taskForm.milestone,
-      customAttrs: parseCustomAttrs(taskForm.custom),
+      title: composer.title.trim(),
+      projectTag: composer.projectTag.trim() || "General",
+      status: composer.status,
+      priority: composer.priority,
+      assignee: "",
+      dueDate: composer.dueDate,
+      startDate: "",
+      imageUrl: composer.imageUrl.trim(),
+      description: composer.description.trim(),
+      advanced: {
+        estimateHours: 0,
+        costRate: 0,
+        budgetCap: 0,
+        portfolioTag: "",
+        workload: "Low",
+        riskLevel: "Low",
+      },
+      customAttrs: {},
+      agent: {
+        skill: state.agentSkills[0]?.name || "",
+        status: "idle",
+        log: [],
+        output: "",
+        lastRunAt: "",
+      },
     };
 
     upsertState((next) => {
-      next.tasks.push(task);
+      next.actionItems.unshift(newItem);
     });
 
-    setTaskForm((prev) => ({
-      ...prev,
+    setComposer({
       title: "",
-      assignee: "",
-      estimateHours: "",
-      costRate: "",
-      custom: "",
-      milestone: false,
-      details: "",
-    }));
-  }
-
-  function advanceTask(taskId) {
-    upsertState((next) => {
-      const task = next.tasks.find((item) => item.id === taskId);
-      if (!task) return;
-      const idx = STATUS_FLOW.indexOf(task.status);
-      task.status = STATUS_FLOW[(idx + 1) % STATUS_FLOW.length];
+      projectTag: composer.projectTag,
+      status: "Backlog",
+      priority: "Medium",
+      dueDate: "",
+      imageUrl: "",
+      description: "",
     });
   }
 
-  function deleteTask(taskId) {
-    upsertState((next) => {
-      next.tasks = next.tasks.filter((item) => item.id !== taskId);
-      next.timeEntries = next.timeEntries.filter((item) => item.taskId !== taskId);
+  function moveCard(itemId, nextStatus) {
+    updateActionItem(itemId, (item) => {
+      item.status = nextStatus;
     });
   }
 
-  function createBoard(event) {
-    event.preventDefault();
-    const name = boardName.trim();
-    if (!name || state.boards.includes(name)) return;
+  function removeActionItem(itemId) {
     upsertState((next) => {
-      next.boards.push(name);
+      next.actionItems = next.actionItems.filter((item) => item.id !== itemId);
     });
-    setSelectedBoard(name);
-    setTaskForm((prev) => ({ ...prev, board: name }));
-    setBoardName("");
+    if (selectedItemId === itemId) {
+      setSelectedItemId("");
+    }
   }
 
-  function moveTask(taskId, status) {
-    upsertState((next) => {
-      const task = next.tasks.find((item) => item.id === taskId);
-      if (task) task.status = status;
+  function toggleCardDetails(itemId) {
+    setExpandedCards((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
+  }
+
+  function assignSkill(itemId, skillName) {
+    updateActionItem(itemId, (item) => {
+      item.agent.skill = skillName;
     });
   }
 
-  function addDocument(event) {
-    event.preventDefault();
-    if (!docForm.name.trim() || !docForm.url.trim()) return;
-    upsertState((next) => {
-      next.documents.unshift({ id: crypto.randomUUID(), name: docForm.name.trim(), url: docForm.url.trim() });
+  function runAgent(itemId) {
+    const item = state.actionItems.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+    if (!item.agent?.skill) {
+      setSyncStatus("Assign an Agent Skill before running.");
+      return;
+    }
+
+    const startTime = new Date().toISOString();
+    updateActionItem(itemId, (target) => {
+      target.agent.status = "running";
+      target.agent.lastRunAt = startTime;
+      target.agent.log = [
+        ...target.agent.log,
+        {
+          id: crypto.randomUUID(),
+          time: startTime,
+          text: `Starting ${target.agent.skill} for \"${target.title}\".`,
+        },
+      ].slice(-60);
     });
-    setDocForm({ name: "", url: "" });
+
+    if (state.openClaw.url && state.openClaw.token) {
+      void executeOpenClaw(itemId, item);
+      return;
+    }
+
+    simulateAgentExecution(itemId);
   }
 
-  function addWiki(event) {
-    event.preventDefault();
-    if (!wikiForm.title.trim() || !wikiForm.content.trim()) return;
-    upsertState((next) => {
-      next.wiki.unshift({ id: crypto.randomUUID(), title: wikiForm.title.trim(), content: wikiForm.content.trim() });
+  function appendAgentLog(itemId, text) {
+    updateActionItem(itemId, (target) => {
+      target.agent.log = [
+        ...target.agent.log,
+        {
+          id: crypto.randomUUID(),
+          time: new Date().toISOString(),
+          text,
+        },
+      ].slice(-60);
     });
-    setWikiForm({ title: "", content: "" });
   }
 
-  function logTime(event) {
-    event.preventDefault();
-    if (!timeForm.taskId || !timeForm.date || !timeForm.hours || !timeForm.rate) return;
-    upsertState((next) => {
-      next.timeEntries.unshift({ id: crypto.randomUUID(), ...timeForm, hours: Number(timeForm.hours), rate: Number(timeForm.rate) });
-    });
-    setTimeForm({ taskId: state.tasks[0]?.id || "", date: "", hours: "", rate: "" });
-  }
+  async function executeOpenClaw(itemId, itemSnapshot) {
+    appendAgentLog(itemId, "Connecting to OpenClaw endpoint...");
 
-  function upsertProject(event) {
-    event.preventDefault();
-    const name = projectForm.name.trim();
-    if (!name) return;
-    upsertState((next) => {
-      const existing = next.projects.find((project) => project.name.toLowerCase() === name.toLowerCase());
-      if (existing) {
-        existing.budget = Number(projectForm.budget || 0);
-        existing.health = projectForm.health;
-      } else {
-        next.projects.push({ id: crypto.randomUUID(), name, budget: Number(projectForm.budget || 0), health: projectForm.health });
+    try {
+      const baseUrl = state.openClaw.url.replace(/\/+$/, "");
+      const response = await fetch(`${baseUrl}/api/skills/run`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.openClaw.token}`,
+        },
+        body: JSON.stringify({
+          skill: itemSnapshot.agent.skill,
+          task: {
+            id: itemSnapshot.id,
+            title: itemSnapshot.title,
+            projectTag: itemSnapshot.projectTag,
+            description: itemSnapshot.description,
+            customAttrs: itemSnapshot.customAttrs,
+            advanced: itemSnapshot.advanced,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenClaw responded ${response.status}`);
       }
-    });
-    setProjectForm({ name: "", budget: "", health: "Green" });
+
+      const payload = await response.json();
+      const output = String(payload?.output || payload?.result || "No output payload returned.");
+      const logs = Array.isArray(payload?.logs)
+        ? payload.logs.map((line) => String(line))
+        : ["OpenClaw execution completed."];
+
+      updateActionItem(itemId, (target) => {
+        target.agent.status = "idle";
+        target.agent.lastRunAt = new Date().toISOString();
+        target.agent.output = output;
+        target.agent.log = [
+          ...target.agent.log,
+          ...logs.map((line) => ({
+            id: crypto.randomUUID(),
+            time: new Date().toISOString(),
+            text: line,
+          })),
+          {
+            id: crypto.randomUUID(),
+            time: new Date().toISOString(),
+            text: "OpenClaw run completed. Output saved.",
+          },
+        ].slice(-60);
+      });
+    } catch (error) {
+      appendAgentLog(itemId, `OpenClaw unavailable (${error.message}). Falling back to local simulation.`);
+      simulateAgentExecution(itemId);
+    }
   }
 
-  function addAgent(event) {
+  function simulateAgentExecution(itemId) {
+    window.setTimeout(() => {
+      appendAgentLog(itemId, "Collecting context from task description and properties...");
+    }, 500);
+
+    window.setTimeout(() => {
+      appendAgentLog(itemId, "Executing skill pipeline and drafting structured output...");
+    }, 1100);
+
+    window.setTimeout(() => {
+      updateActionItem(itemId, (target) => {
+        const output = [
+          `Skill: ${target.agent.skill}`,
+          `Generated: ${new Date().toLocaleString()}`,
+          "",
+          "Actionable Output:",
+          `1. Goal: ${target.title}`,
+          `2. Recommended next step: finalize a short execution brief for ${target.projectTag}.`,
+          "3. Suggested artifacts: checklist, links, and decision notes.",
+          "4. Risk flag: validate assumptions before execution.",
+        ].join("\n");
+
+        target.agent.status = "idle";
+        target.agent.output = output;
+        target.agent.log = [
+          ...target.agent.log,
+          {
+            id: crypto.randomUUID(),
+            time: new Date().toISOString(),
+            text: "Run completed. Output saved in Agent Output.",
+          },
+        ].slice(-60);
+      });
+    }, 1900);
+  }
+
+  function saveCustomProperties() {
+    if (!selectedItem) return;
+    const parsed = parseCustomAttrs(customAttrsText);
+    updateActionItem(selectedItem.id, (item) => {
+      item.customAttrs = parsed;
+    });
+    setSyncStatus("Properties saved.");
+  }
+
+  function addDocumentLink(event) {
     event.preventDefault();
-    if (!agentForm.name.trim() || !agentForm.skills.trim()) return;
+    if (!documentForm.name.trim() || !documentForm.url.trim()) return;
     upsertState((next) => {
-      next.agents.push({
+      next.documents.unshift({
         id: crypto.randomUUID(),
-        name: agentForm.name.trim(),
-        skills: agentForm.skills.split(",").map((s) => s.trim()).filter(Boolean),
-        status: agentForm.status,
-        load: agentForm.status === "Busy" ? 80 : agentForm.status === "Available" ? 30 : 0,
+        name: documentForm.name.trim(),
+        url: documentForm.url.trim(),
+        storagePath: "",
       });
     });
-    setAgentForm({ name: "", skills: "", status: "Available" });
-  }
-
-  function assignAgent(event) {
-    event.preventDefault();
-    upsertState((next) => {
-      const task = next.tasks.find((t) => t.id === assignment.taskId);
-      const agent = next.agents.find((a) => a.id === assignment.agentId);
-      if (!task || !agent) return;
-      task.assignee = agent.name;
-      if (task.status === "Backlog") task.status = "In Progress";
-      agent.status = "Busy";
-      agent.load = Math.min(100, agent.load + 10);
-    });
-  }
-
-  function saveOpenClaw() {
-    upsertState((next) => {
-      next.openClaw = { ...next.openClaw };
-    });
-  }
-
-  function applyTemplate() {
-    const templateTasks = [
-      { title: "Brand positioning brief", type: "Task", priority: "High", due: keyForOffset(5), board: "Marketing" },
-      { title: "Landing page copy", type: "Feature", priority: "Medium", due: keyForOffset(9), board: "Marketing" },
-      { title: "QA regression checklist", type: "Task", priority: "High", due: keyForOffset(7), board: "Core" },
-      { title: "Launch milestone", type: "Risk", priority: "Critical", due: keyForOffset(14), board: "Core", milestone: true },
-    ];
-
-    upsertState((next) => {
-      for (const item of templateTasks) {
-        if (!next.boards.includes(item.board)) next.boards.push(item.board);
-        next.tasks.push({
-          id: crypto.randomUUID(),
-          title: item.title,
-          assignee: "Founder",
-          type: item.type,
-          status: "Backlog",
-          priority: item.priority,
-          board: item.board,
-          startDate: keyForOffset(0),
-          dueDate: item.due,
-          estimateHours: 4,
-          costRate: 85,
-          details: "Added from template",
-          milestone: Boolean(item.milestone),
-          customAttrs: { template: "Product Launch" },
-        });
-      }
-    });
-  }
-
-  function exportJson() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `hustle-flow-export-${keyFromDate(new Date())}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function syncToSupabase() {
-    if (!supabase) {
-      setSyncStatus("Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      return;
-    }
-
-    setSyncLoading(true);
-    setSyncStatus("Syncing local state to Supabase...");
-
-    try {
-      const boards = state.boards.map((name) => ({
-        id: stableIdFromText(`board-${name}`),
-        workspace_id: WORKSPACE_ID,
-        name,
-      }));
-      const tasks = state.tasks.map((task) => ({
-        id: task.id,
-        workspace_id: WORKSPACE_ID,
-        title: task.title,
-        assignee: task.assignee || "",
-        type: task.type,
-        status: task.status,
-        priority: task.priority,
-        board: task.board,
-        start_date: task.startDate || null,
-        due_date: task.dueDate || null,
-        estimate_hours: Number(task.estimateHours || 0),
-        cost_rate: Number(task.costRate || 0),
-        details: task.details || "",
-        milestone: Boolean(task.milestone),
-        custom_attrs: task.customAttrs || {},
-      }));
-      const documents = state.documents.map((doc) => ({
-        id: doc.id,
-        workspace_id: WORKSPACE_ID,
-        name: doc.name,
-        url: doc.url,
-        storage_path: doc.storagePath || null,
-      }));
-      const wikiPages = state.wiki.map((page) => ({
-        id: page.id,
-        workspace_id: WORKSPACE_ID,
-        title: page.title,
-        content: page.content,
-      }));
-      const agents = state.agents.map((agent) => ({
-        id: agent.id,
-        workspace_id: WORKSPACE_ID,
-        name: agent.name,
-        skills: agent.skills || [],
-        status: agent.status,
-        load: Number(agent.load || 0),
-      }));
-      const projects = state.projects.map((project) => ({
-        id: project.id,
-        workspace_id: WORKSPACE_ID,
-        name: project.name,
-        budget: Number(project.budget || 0),
-        health: project.health,
-      }));
-      const timeEntries = state.timeEntries.map((entry) => ({
-        id: entry.id,
-        workspace_id: WORKSPACE_ID,
-        task_id: entry.taskId,
-        date: entry.date,
-        hours: Number(entry.hours || 0),
-        rate: Number(entry.rate || 0),
-      }));
-
-      await replaceWorkspaceRows(supabase, "boards", boards);
-      await replaceWorkspaceRows(supabase, "tasks", tasks);
-      await replaceWorkspaceRows(supabase, "documents", documents);
-      await replaceWorkspaceRows(supabase, "wiki_pages", wikiPages);
-      await replaceWorkspaceRows(supabase, "agents", agents);
-      await replaceWorkspaceRows(supabase, "projects", projects);
-      await replaceWorkspaceRows(supabase, "time_entries", timeEntries);
-
-      const openClawPayload = {
-        id: WORKSPACE_ID,
-        workspace_id: WORKSPACE_ID,
-        url: state.openClaw.url || "",
-        token: state.openClaw.token || "",
-      };
-      const openClawResult = await supabase.from("openclaw_settings").upsert(openClawPayload);
-      if (openClawResult.error) throw openClawResult.error;
-
-      setSyncStatus("Supabase sync complete.");
-    } catch (error) {
-      setSyncStatus(`Supabase sync failed: ${error.message}`);
-    } finally {
-      setSyncLoading(false);
-    }
-  }
-
-  async function loadFromSupabase() {
-    if (!supabase) {
-      setSyncStatus("Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      return;
-    }
-
-    setSyncLoading(true);
-    setSyncStatus("Loading workspace from Supabase...");
-
-    try {
-      const [boardsRes, tasksRes, docsRes, wikiRes, agentsRes, projectsRes, timeRes, openClawRes] = await Promise.all([
-        supabase.from("boards").select("name").eq("workspace_id", WORKSPACE_ID).order("name", { ascending: true }),
-        supabase.from("tasks").select("*").eq("workspace_id", WORKSPACE_ID),
-        supabase.from("documents").select("*").eq("workspace_id", WORKSPACE_ID),
-        supabase.from("wiki_pages").select("*").eq("workspace_id", WORKSPACE_ID),
-        supabase.from("agents").select("*").eq("workspace_id", WORKSPACE_ID),
-        supabase.from("projects").select("*").eq("workspace_id", WORKSPACE_ID),
-        supabase.from("time_entries").select("*").eq("workspace_id", WORKSPACE_ID),
-        supabase.from("openclaw_settings").select("*").eq("workspace_id", WORKSPACE_ID).maybeSingle(),
-      ]);
-
-      for (const result of [boardsRes, tasksRes, docsRes, wikiRes, agentsRes, projectsRes, timeRes]) {
-        if (result.error) throw result.error;
-      }
-      if (openClawRes.error && openClawRes.error.code !== "PGRST116") throw openClawRes.error;
-
-      const boards = (boardsRes.data || []).map((row) => row.name);
-      const tasks = (tasksRes.data || []).map((row) => ({
-        id: row.id,
-        title: row.title,
-        assignee: row.assignee || "",
-        type: row.type,
-        status: row.status,
-        priority: row.priority,
-        board: row.board,
-        startDate: row.start_date || "",
-        dueDate: row.due_date || "",
-        estimateHours: Number(row.estimate_hours || 0),
-        costRate: Number(row.cost_rate || 0),
-        details: row.details || "",
-        milestone: Boolean(row.milestone),
-        customAttrs: row.custom_attrs || {},
-      }));
-      const documents = (docsRes.data || []).map((row) => ({
-        id: row.id,
-        name: row.name,
-        url: row.url,
-        storagePath: row.storage_path || "",
-      }));
-      const wiki = (wikiRes.data || []).map((row) => ({ id: row.id, title: row.title, content: row.content }));
-      const agents = (agentsRes.data || []).map((row) => ({
-        id: row.id,
-        name: row.name,
-        skills: Array.isArray(row.skills) ? row.skills : [],
-        status: row.status,
-        load: Number(row.load || 0),
-      }));
-      const projects = (projectsRes.data || []).map((row) => ({
-        id: row.id,
-        name: row.name,
-        budget: Number(row.budget || 0),
-        health: row.health,
-      }));
-      const timeEntries = (timeRes.data || []).map((row) => ({
-        id: row.id,
-        taskId: row.task_id,
-        date: row.date,
-        hours: Number(row.hours || 0),
-        rate: Number(row.rate || 0),
-      }));
-
-      setState((prev) => ({
-        ...prev,
-        boards: boards.length ? boards : prev.boards,
-        tasks,
-        documents,
-        wiki,
-        agents,
-        projects,
-        timeEntries,
-        openClaw: openClawRes.data
-          ? { url: openClawRes.data.url || "", token: openClawRes.data.token || "" }
-          : prev.openClaw,
-      }));
-
-      if (boards.length) {
-        setSelectedBoard(boards[0]);
-        setTaskForm((prev) => ({ ...prev, board: boards[0] }));
-      }
-
-      setSyncStatus("Loaded latest data from Supabase.");
-    } catch (error) {
-      setSyncStatus(`Load failed: ${error.message}`);
-    } finally {
-      setSyncLoading(false);
-    }
+    setDocumentForm({ name: "", url: "" });
   }
 
   async function uploadDocumentToStorage() {
     if (!supabase) {
-      setSyncStatus("Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      setSyncStatus("Set Supabase environment variables to use Storage upload.");
       return;
     }
     if (!docFile) {
@@ -596,86 +507,241 @@ export default function Page() {
     try {
       const safeName = sanitizeFileName(docFile.name);
       const storagePath = `${WORKSPACE_ID}/${Date.now()}-${safeName}`;
-      const uploadRes = await supabase.storage.from("documents").upload(storagePath, docFile, { upsert: false });
-      if (uploadRes.error) throw uploadRes.error;
+      const uploadResult = await supabase.storage.from("documents").upload(storagePath, docFile, { upsert: false });
+      if (uploadResult.error) throw uploadResult.error;
 
-      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
-      const publicUrl = urlData?.publicUrl || "";
+      const { data } = supabase.storage.from("documents").getPublicUrl(storagePath);
+      const publicUrl = data?.publicUrl || "";
 
       const newDoc = {
         id: crypto.randomUUID(),
-        name: docForm.name.trim() || docFile.name,
+        name: documentForm.name.trim() || docFile.name,
         url: publicUrl,
         storagePath,
       };
 
-      const dbResult = await supabase.from("documents").upsert({
-        id: newDoc.id,
-        workspace_id: WORKSPACE_ID,
-        name: newDoc.name,
-        url: newDoc.url,
-        storage_path: newDoc.storagePath,
-      });
-      if (dbResult.error) throw dbResult.error;
-
       upsertState((next) => {
         next.documents.unshift(newDoc);
       });
+
       setDocFile(null);
-      setDocForm({ name: "", url: "" });
-      setSyncStatus("File uploaded and attached to Documents.");
+      setDocumentForm({ name: "", url: "" });
+      setSyncStatus("Upload complete. Document added to Vault.");
     } catch (error) {
-      setSyncStatus(`Storage upload failed: ${error.message}`);
+      setSyncStatus(`Upload failed: ${error.message}`);
     } finally {
       setUploadingDoc(false);
     }
   }
 
-  async function runGemini(event) {
+  function addWikiPage(event) {
     event.preventDefault();
-    if (!aiPrompt.trim()) return;
+    if (!wikiForm.title.trim() || !wikiForm.content.trim()) return;
 
-    setAiLoading(true);
-    setAiError("");
-    setAiResult("");
+    upsertState((next) => {
+      next.wiki.unshift({
+        id: crypto.randomUUID(),
+        title: wikiForm.title.trim(),
+        content: wikiForm.content.trim(),
+      });
+    });
+
+    setWikiForm({ title: "", content: "" });
+  }
+
+  function addSkill(event) {
+    event.preventDefault();
+    if (!skillForm.name.trim()) return;
+
+    const newSkill = {
+      id: crypto.randomUUID(),
+      name: skillForm.name.trim(),
+      description: skillForm.description.trim() || "Custom OpenClaw skill.",
+    };
+
+    upsertState((next) => {
+      next.agentSkills.push(newSkill);
+    });
+
+    setSkillForm({ name: "", description: "" });
+  }
+
+  function removeSkill(skillId) {
+    const skill = state.agentSkills.find((item) => item.id === skillId);
+    if (!skill) return;
+
+    upsertState((next) => {
+      next.agentSkills = next.agentSkills.filter((item) => item.id !== skillId);
+      next.actionItems.forEach((actionItem) => {
+        if (actionItem.agent.skill === skill.name) {
+          actionItem.agent.skill = "";
+        }
+      });
+    });
+  }
+
+  function saveOpenClaw() {
+    setSyncStatus("OpenClaw credentials stored locally.");
+  }
+
+  async function syncToSupabase() {
+    if (!supabase) {
+      setSyncStatus("Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_* key before syncing.");
+      return;
+    }
+
+    setSyncLoading(true);
+    setSyncStatus("Syncing to Supabase...");
 
     try {
-      const response = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "gemini-2.5-flash",
-          context: aiContext,
-          prompt: aiPrompt.trim(),
-          projectSnapshot: {
-            tasks: state.tasks.length,
-            openTasks: state.tasks.filter((task) => task.status !== "Done").length,
-            milestones: milestones.map((m) => ({ title: m.title, dueDate: m.dueDate, status: m.status })),
-            projects: state.projects.map((project) => ({
-              name: project.name,
-              budget: project.budget,
-              health: project.health,
-            })),
-            agents: state.agents.map((agent) => ({
-              name: agent.name,
-              skills: agent.skills,
-              status: agent.status,
-              load: agent.load,
-            })),
+      const taskRows = state.actionItems.map((item) => ({
+        id: item.id,
+        workspace_id: WORKSPACE_ID,
+        title: item.title,
+        assignee: item.assignee || "",
+        type: "Action Item",
+        status: item.status,
+        priority: item.priority,
+        board: item.projectTag || "General",
+        start_date: item.startDate || null,
+        due_date: item.dueDate || null,
+        estimate_hours: Number(item.advanced?.estimateHours || 0),
+        cost_rate: Number(item.advanced?.costRate || 0),
+        details: item.description || "",
+        milestone: false,
+        custom_attrs: {
+          projectTag: item.projectTag,
+          imageUrl: item.imageUrl,
+          advanced: item.advanced,
+          customAttrs: item.customAttrs,
+          agent: item.agent,
+        },
+      }));
+
+      const documentRows = state.documents.map((doc) => ({
+        id: doc.id,
+        workspace_id: WORKSPACE_ID,
+        name: doc.name,
+        url: doc.url,
+        storage_path: doc.storagePath || null,
+      }));
+
+      const wikiRows = state.wiki.map((page) => ({
+        id: page.id,
+        workspace_id: WORKSPACE_ID,
+        title: page.title,
+        content: page.content,
+      }));
+
+      await replaceWorkspaceRows(supabase, "tasks", taskRows);
+      await replaceWorkspaceRows(supabase, "documents", documentRows);
+      await replaceWorkspaceRows(supabase, "wiki_pages", wikiRows);
+
+      const openClawResult = await supabase.from("openclaw_settings").upsert({
+        id: WORKSPACE_ID,
+        workspace_id: WORKSPACE_ID,
+        url: state.openClaw.url || "",
+        token: state.openClaw.token || "",
+      });
+      if (openClawResult.error) throw openClawResult.error;
+
+      setSyncStatus("Supabase sync complete.");
+    } catch (error) {
+      setSyncStatus(`Sync failed: ${error.message}`);
+    } finally {
+      setSyncLoading(false);
+    }
+  }
+
+  async function loadFromSupabase() {
+    if (!supabase) {
+      setSyncStatus("Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_* key before loading.");
+      return;
+    }
+
+    setSyncLoading(true);
+    setSyncStatus("Loading workspace from Supabase...");
+
+    try {
+      const [tasksRes, docsRes, wikiRes, openClawRes] = await Promise.all([
+        supabase.from("tasks").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("documents").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("wiki_pages").select("*").eq("workspace_id", WORKSPACE_ID),
+        supabase.from("openclaw_settings").select("*").eq("workspace_id", WORKSPACE_ID).maybeSingle(),
+      ]);
+
+      if (tasksRes.error) throw tasksRes.error;
+      if (docsRes.error) throw docsRes.error;
+      if (wikiRes.error) throw wikiRes.error;
+      if (openClawRes.error && openClawRes.error.code !== "PGRST116") throw openClawRes.error;
+
+      const actionItems = (tasksRes.data || []).map((row) => {
+        const attrs = asObject(row.custom_attrs);
+        const advanced = asObject(attrs.advanced);
+        const customAttrs = asObject(attrs.customAttrs);
+        const agent = asObject(attrs.agent);
+
+        return {
+          id: row.id,
+          title: row.title,
+          projectTag: attrs.projectTag || row.board || "General",
+          status: STATUS_COLUMNS.includes(row.status) ? row.status : "Backlog",
+          priority: PRIORITY_LEVELS.includes(row.priority) ? row.priority : "Medium",
+          assignee: row.assignee || "",
+          dueDate: row.due_date || "",
+          startDate: row.start_date || "",
+          imageUrl: attrs.imageUrl || "",
+          description: row.details || "",
+          advanced: {
+            estimateHours: Number(advanced.estimateHours || row.estimate_hours || 0),
+            costRate: Number(advanced.costRate || row.cost_rate || 0),
+            budgetCap: Number(advanced.budgetCap || 0),
+            portfolioTag: String(advanced.portfolioTag || ""),
+            workload: String(advanced.workload || "Low"),
+            riskLevel: String(advanced.riskLevel || "Low"),
           },
-        }),
+          customAttrs,
+          agent: {
+            skill: String(agent.skill || ""),
+            status: String(agent.status || "idle"),
+            log: Array.isArray(agent.log) ? agent.log : [],
+            output: String(agent.output || ""),
+            lastRunAt: String(agent.lastRunAt || ""),
+          },
+        };
       });
 
-      const data = await response.json();
-      if (!response.ok) {
-        setAiError(data?.error || "AI request failed.");
-        return;
-      }
-      setAiResult(data.text || "No response text returned.");
-    } catch {
-      setAiError("Network error while contacting Gemini.");
+      const documents = (docsRes.data || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        url: row.url,
+        storagePath: row.storage_path || "",
+      }));
+
+      const wiki = (wikiRes.data || []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        content: row.content,
+      }));
+
+      setState((prev) => ({
+        ...prev,
+        actionItems: actionItems.length ? actionItems : prev.actionItems,
+        documents,
+        wiki,
+        openClaw: openClawRes.data
+          ? {
+              url: openClawRes.data.url || "",
+              token: openClawRes.data.token || "",
+            }
+          : prev.openClaw,
+      }));
+
+      setSyncStatus("Loaded latest data from Supabase.");
+    } catch (error) {
+      setSyncStatus(`Load failed: ${error.message}`);
     } finally {
-      setAiLoading(false);
+      setSyncLoading(false);
     }
   }
 
@@ -684,291 +750,268 @@ export default function Page() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand brand-charcoal">
-          <img className="brand-logo" src="/assets/hustle-flow-logo.png" alt="Hustle Flow logo" />
+    <div className="hf-shell">
+      <aside className="hf-sidebar">
+        <div className="hf-brand-card">
+          <img className="hf-logo" src="/assets/hustle-flow-logo.png" alt="Hustle Flow" />
         </div>
-        <div className="brand-copy">
+        <div className="hf-brand-copy">
           <h1>Hustle Flow</h1>
-          <p>Solo PM + AI Agent Ops</p>
+          <p>Lean PMOS for founders + OpenClaw skills</p>
         </div>
 
-        <nav className="nav" aria-label="Primary">
+        <nav className="hf-nav" aria-label="Primary">
           {[
             ["dashboard", "Dashboard"],
-            ["work-packages", "Work Packages"],
-            ["boards", "Agile Boards"],
-            ["timeline", "Gantt & Roadmap"],
+            ["boards", "Boards"],
             ["calendar", "Calendar"],
-            ["docs", "Documents & Wiki"],
-            ["finance", "Time + Cost"],
-            ["portfolio", "Portfolios"],
-            ["agents", "AI Agents"],
+            ["agent-hub", "Agent Hub"],
+            ["vault", "Vault"],
           ].map(([id, label]) => (
-            <button key={id} className={`nav-btn ${section === id ? "active" : ""}`} onClick={() => setSection(id)}>
+            <button
+              key={id}
+              className={`hf-nav-btn ${section === id ? "active" : ""}`}
+              onClick={() => setSection(id)}
+            >
               {label}
             </button>
           ))}
         </nav>
-
-        <a className="btn ghost full guide-link" href="/guide">Open User Guide</a>
-
-        <section className="panel small">
-          <h3>OpenClaw</h3>
-          <label className="field-label" htmlFor="openclaw-url">Server URL</label>
-          <input
-            id="openclaw-url"
-            type="url"
-            placeholder="https://agents.local"
-            value={state.openClaw.url}
-            onChange={(event) => setState((prev) => ({ ...prev, openClaw: { ...prev.openClaw, url: event.target.value } }))}
-          />
-          <label className="field-label" htmlFor="openclaw-token">Access Token</label>
-          <input
-            id="openclaw-token"
-            type="password"
-            placeholder="ocw_..."
-            value={state.openClaw.token}
-            onChange={(event) => setState((prev) => ({ ...prev, openClaw: { ...prev.openClaw, token: event.target.value } }))}
-          />
-          <button className="btn full" onClick={saveOpenClaw}>Save Integration</button>
-        </section>
       </aside>
 
-      <main className="main">
-        <header className="topbar">
+      <main className="hf-main">
+        <header className="hf-topbar">
           <div>
             <h2>{titleCase(section.replace("-", " "))}</h2>
-            <p className="muted">Ready. Changes persist in browser storage{syncStatus ? ` | ${syncStatus}` : "."}</p>
+            <p className="muted">
+              {syncStatus || "Optimistic interactions enabled. Card moves update instantly."}
+            </p>
           </div>
-          <div className="actions">
+          <div className="hf-actions">
             <a className="btn ghost" href="/guide">User Guide</a>
-            <button className="btn ghost" onClick={applyTemplate}>Apply Product Launch Template</button>
-            <button className="btn ghost" onClick={loadFromSupabase} disabled={syncLoading}>Load Supabase</button>
-            <button className="btn ghost" onClick={syncToSupabase} disabled={syncLoading}>{syncLoading ? "Syncing..." : "Sync Supabase"}</button>
-            <button className="btn" onClick={exportJson}>Export Data</button>
+            <button className="btn ghost" onClick={loadFromSupabase} disabled={syncLoading}>Load Cloud</button>
+            <button className="btn" onClick={syncToSupabase} disabled={syncLoading}>{syncLoading ? "Syncing..." : "Sync Cloud"}</button>
           </div>
         </header>
 
         {section === "dashboard" && (
-          <section className="section active">
-            <div className="stats">
-              <article className="stat"><h4>Work Packages</h4><p>{state.tasks.length}</p></article>
-              <article className="stat"><h4>Completed</h4><p>{state.tasks.filter((t) => t.status === "Done").length}</p></article>
-              <article className="stat"><h4>Tracked Hours</h4><p>{Math.round(totalHours)}</p></article>
-              <article className="stat"><h4>Tracked Cost</h4><p>${Math.round(totalCost).toLocaleString()}</p></article>
+          <section className="hf-section">
+            <div className="hf-stat-grid">
+              <article className="hf-stat"><h4>Action Items</h4><p>{summary.total}</p></article>
+              <article className="hf-stat status-doing"><h4>Doing</h4><p>{summary.doing}</p></article>
+              <article className="hf-stat status-done"><h4>Done</h4><p>{summary.done}</p></article>
+              <article className="hf-stat"><h4>Agents Running</h4><p>{summary.runningAgents}</p></article>
             </div>
-            <div className="grid two">
-              <article className="panel">
-                <h3>Upcoming Milestones</h3>
-                <ul className="list">
-                  {milestones.length ? milestones.slice(0, 6).map((m) => (
-                    <li key={m.id} className="item"><strong>{m.title}</strong><br /><span className="muted">{m.dueDate || "No due date"} - {m.status}</span></li>
-                  )) : <li className="item">No milestones yet.</li>}
+
+            <div className="hf-grid-two">
+              <article className="hf-panel">
+                <h3>Due in 7 Days</h3>
+                <p className="muted">{summary.dueSoon} items need attention this week.</p>
+                <ul className="hf-list">
+                  {state.actionItems
+                    .filter((item) => isDueWithinDays(item.dueDate, 7) && item.status !== "Done")
+                    .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""))
+                    .slice(0, 8)
+                    .map((item) => (
+                      <li key={item.id} className="hf-item">
+                        <strong>{item.title}</strong>
+                        <span className="muted">{item.projectTag} · due {item.dueDate || "n/a"}</span>
+                      </li>
+                    ))}
                 </ul>
               </article>
-              <article className="panel">
-                <h3>Weekly Load Planner</h3>
-                <div className="planner">
-                  {assigneeLoads.length ? assigneeLoads.map(([name, load]) => (
-                    <div key={name} className="item"><strong>{name}</strong><br /><span className="muted">{load.count} items, {load.hours}h planned</span></div>
-                  )) : <div className="item">No assignments yet.</div>}
+
+              <article className="hf-panel">
+                <h3>Quick Actions</h3>
+                <div className="hf-quick-actions">
+                  <button className="btn" onClick={() => setSection("boards")}>Open Boards</button>
+                  <button className="btn ghost" onClick={() => setSection("agent-hub")}>Manage Skills</button>
+                  <button className="btn ghost" onClick={() => setSection("vault")}>Open Vault</button>
+                  <a className="btn ghost" href="/guide">Read User Guide</a>
                 </div>
               </article>
             </div>
-          </section>
-        )}
-
-        {section === "work-packages" && (
-          <section className="section active">
-            <article className="panel">
-              <h3>Create Work Package</h3>
-              <form className="grid-form" onSubmit={handleCreateTask}>
-                <input value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} required placeholder="Title" />
-                <input value={taskForm.assignee} onChange={(e) => setTaskForm({ ...taskForm, assignee: e.target.value })} placeholder="Assignee or AI Agent" />
-                <select value={taskForm.type} onChange={(e) => setTaskForm({ ...taskForm, type: e.target.value })}><option>Feature</option><option>Task</option><option>Bug</option><option>Risk</option></select>
-                <select value={taskForm.status} onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value })}>{STATUS_FLOW.map((s) => <option key={s}>{s}</option>)}</select>
-                <select value={taskForm.priority} onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select>
-                <select value={taskForm.board} onChange={(e) => setTaskForm({ ...taskForm, board: e.target.value })}>{state.boards.map((board) => <option key={board}>{board}</option>)}</select>
-                <input type="date" value={taskForm.startDate} onChange={(e) => setTaskForm({ ...taskForm, startDate: e.target.value })} />
-                <input type="date" value={taskForm.dueDate} onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })} />
-                <input type="number" min="0" step="0.5" value={taskForm.estimateHours} onChange={(e) => setTaskForm({ ...taskForm, estimateHours: e.target.value })} placeholder="Estimate hours" />
-                <input type="number" min="0" step="1" value={taskForm.costRate} onChange={(e) => setTaskForm({ ...taskForm, costRate: e.target.value })} placeholder="Hourly $ rate" />
-                <input value={taskForm.custom} onChange={(e) => setTaskForm({ ...taskForm, custom: e.target.value })} placeholder="Custom attrs (e.g. client:Acme,channel:SEO)" />
-                <label className="inline-check"><input type="checkbox" checked={taskForm.milestone} onChange={(e) => setTaskForm({ ...taskForm, milestone: e.target.checked })} /> Milestone</label>
-                <textarea rows={2} value={taskForm.details} onChange={(e) => setTaskForm({ ...taskForm, details: e.target.value })} placeholder="Description" />
-                <button className="btn" type="submit">Add Work Package</button>
-              </form>
-            </article>
-
-            <article className="panel">
-              <div className="row-wrap">
-                <h3>Views</h3>
-                <div className="segmented">
-                  {[
-                    ["table", "Table"],
-                    ["calendar", "Calendar"],
-                    ["gallery", "Gallery"],
-                  ].map(([id, label]) => (
-                    <button key={id} className={`seg-btn ${taskView === id ? "active" : ""}`} onClick={() => setTaskView(id)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="filters">
-                <input placeholder="Search title or assignee" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
-                <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="">All statuses</option>{STATUS_FLOW.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-                <select value={filters.priority} onChange={(e) => setFilters({ ...filters, priority: e.target.value })}><option value="">All priorities</option>{["Critical", "High", "Medium", "Low"].map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                <select value={filters.sortBy} onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}>
-                  <option value="dueDate">Sort: Due date</option><option value="priority">Sort: Priority</option><option value="status">Sort: Status</option><option value="title">Sort: Title</option>
-                </select>
-              </div>
-
-              {taskView === "table" && (
-                filteredTasks.length ? (
-                  <table className="table">
-                    <thead><tr><th>Title</th><th>Status</th><th>Priority</th><th>Board</th><th>Dates</th><th>Assignee</th><th>Custom</th><th>Actions</th></tr></thead>
-                    <tbody>
-                      {filteredTasks.map((task) => (
-                        <tr key={task.id}>
-                          <td><strong>{task.title}</strong><br /><span className="muted">{task.type}</span></td>
-                          <td>{task.status}</td>
-                          <td><span className={`badge pri-${task.priority}`}>{task.priority}</span></td>
-                          <td>{task.board}</td>
-                          <td>{task.startDate || "-"}<br />{task.dueDate || "-"}</td>
-                          <td>{task.assignee || "Unassigned"}</td>
-                          <td>{formatAttrs(task.customAttrs)}</td>
-                          <td>
-                            <button className="btn ghost" onClick={() => advanceTask(task.id)}>Advance</button>
-                            <button className="btn ghost" onClick={() => deleteTask(task.id)}>Delete</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : <p className="muted">No work packages match current filters.</p>
-              )}
-
-              {taskView === "calendar" && (
-                taskDateKeys.length ? (
-                  <div className="task-cal-grid">
-                    {taskDateKeys.map((date) => (
-                      <div key={date} className="item">
-                        <strong>{date}</strong>
-                        <ul className="list">
-                          {tasksByDate[date].map((task) => <li key={task.id}>{task.title} <span className={`badge pri-${task.priority}`}>{task.priority}</span></li>)}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p className="muted">No due dates set for filtered packages.</p>
-              )}
-
-              {taskView === "gallery" && (
-                filteredTasks.length ? (
-                  <div className="task-gallery">
-                    {filteredTasks.map((task) => (
-                      <article key={task.id} className="item">
-                        <strong>{task.title}</strong>
-                        <p className="muted">{task.details || "No description"}</p>
-                        <span className="badge">{task.status}</span> <span className={`badge pri-${task.priority}`}>{task.priority}</span>
-                      </article>
-                    ))}
-                  </div>
-                ) : <p className="muted">No cards to display.</p>
-              )}
-            </article>
           </section>
         )}
 
         {section === "boards" && (
-          <section className="section active">
-            <article className="panel">
-              <div className="row-wrap">
-                <h3>Kanban + Action Boards</h3>
-                <form className="inline-form" onSubmit={createBoard}>
-                  <input value={boardName} onChange={(e) => setBoardName(e.target.value)} maxLength={40} placeholder="New board name" required />
-                  <button className="btn" type="submit">Create Board</button>
-                </form>
+          <section className="hf-section">
+            <article className="hf-panel">
+              <div className="hf-row">
+                <h3>Action Items</h3>
+                <div className="hf-segmented">
+                  <button className={`hf-seg-btn ${boardView === "kanban" ? "active" : ""}`} onClick={() => setBoardView("kanban")}>Kanban</button>
+                  <button className={`hf-seg-btn ${boardView === "gallery" ? "active" : ""}`} onClick={() => setBoardView("gallery")}>Gallery</button>
+                </div>
               </div>
 
-              <div className="row-wrap">
-                <label className="field-label" htmlFor="board-selector">Board</label>
-                <select id="board-selector" value={selectedBoard} onChange={(e) => setSelectedBoard(e.target.value)}>
-                  {state.boards.map((board) => <option key={board} value={board}>{board}</option>)}
+              <form className="hf-composer" onSubmit={createActionItem}>
+                <input
+                  value={composer.title}
+                  onChange={(event) => setComposer((prev) => ({ ...prev, title: event.target.value }))}
+                  placeholder="New Action Item title"
+                  required
+                />
+                <input
+                  value={composer.projectTag}
+                  onChange={(event) => setComposer((prev) => ({ ...prev, projectTag: event.target.value }))}
+                  placeholder="Project Tag"
+                />
+                <select value={composer.status} onChange={(event) => setComposer((prev) => ({ ...prev, status: event.target.value }))}>
+                  {STATUS_COLUMNS.map((status) => <option key={status}>{status}</option>)}
                 </select>
+                <select value={composer.priority} onChange={(event) => setComposer((prev) => ({ ...prev, priority: event.target.value }))}>
+                  {PRIORITY_LEVELS.map((priority) => <option key={priority}>{priority}</option>)}
+                </select>
+                <input
+                  type="date"
+                  value={composer.dueDate}
+                  onChange={(event) => setComposer((prev) => ({ ...prev, dueDate: event.target.value }))}
+                />
+                <input
+                  value={composer.imageUrl}
+                  onChange={(event) => setComposer((prev) => ({ ...prev, imageUrl: event.target.value }))}
+                  placeholder="Image URL (optional for Gallery)"
+                />
+                <textarea
+                  rows={2}
+                  value={composer.description}
+                  onChange={(event) => setComposer((prev) => ({ ...prev, description: event.target.value }))}
+                  placeholder="Short description"
+                />
+                <button className="btn" type="submit">Create Action Item</button>
+              </form>
+
+              <div className="hf-row">
+                <input
+                  className="hf-search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search title, project tag, or description"
+                />
               </div>
 
-              <div className="kanban">
-                {STATUS_FLOW.map((status) => (
-                  <section
-                    key={status}
-                    className="kanban-col"
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      const taskId = event.dataTransfer.getData("text/task-id");
-                      moveTask(taskId, status);
-                    }}
-                  >
-                    <h4>{status}</h4>
-                    {state.tasks.filter((task) => task.board === selectedBoard && task.status === status).map((task) => (
-                      <article
-                        key={task.id}
-                        className="card"
-                        draggable
-                        onDragStart={(event) => event.dataTransfer.setData("text/task-id", task.id)}
-                      >
-                        <strong>{task.title}</strong><br />
-                        <span className="muted">{task.assignee || "Unassigned"}</span><br />
-                        <span className={`badge pri-${task.priority}`}>{task.priority}</span>
-                      </article>
-                    ))}
-                  </section>
-                ))}
-              </div>
+              {boardView === "kanban" ? (
+                <div className="hf-kanban">
+                  {STATUS_COLUMNS.map((status) => (
+                    <section
+                      key={status}
+                      className="hf-column"
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        const id = event.dataTransfer.getData("text/item-id");
+                        moveCard(id, status);
+                      }}
+                    >
+                      <header className={`hf-column-head status-${toStatusClass(status)}`}>
+                        <h4>{status}</h4>
+                        <span>{filteredItems.filter((item) => item.status === status).length}</span>
+                      </header>
+
+                      <div className="hf-card-stack">
+                        {filteredItems
+                          .filter((item) => item.status === status)
+                          .map((item) => (
+                            <article
+                              key={item.id}
+                              className="hf-card"
+                              draggable
+                              onDragStart={(event) => event.dataTransfer.setData("text/item-id", item.id)}
+                            >
+                              <button className="hf-card-open" onClick={() => { setSelectedItemId(item.id); setDetailTab("overview"); }}>
+                                <strong>{item.title}</strong>
+                                <span className="hf-tag">{item.projectTag || "General"}</span>
+                                {item.agent?.status === "running" ? <span className="hf-agent-active">Agent Running</span> : null}
+                              </button>
+
+                              <button className="hf-mini-link" onClick={() => toggleCardDetails(item.id)}>
+                                {expandedCards[item.id] ? "Hide" : "Show More"}
+                              </button>
+
+                              {expandedCards[item.id] ? (
+                                <div className="hf-card-more">
+                                  <div className="hf-mini-meta">
+                                    <span className={`hf-priority p-${item.priority.toLowerCase()}`}>{item.priority}</span>
+                                    <span>{item.assignee || "Unassigned"}</span>
+                                    <span>{item.dueDate || "No deadline"}</span>
+                                  </div>
+
+                                  <label className="hf-field-label">Assign to Agent Skill</label>
+                                  <select
+                                    value={item.agent.skill || ""}
+                                    onChange={(event) => assignSkill(item.id, event.target.value)}
+                                  >
+                                    <option value="">Select skill</option>
+                                    {state.agentSkills.map((skill) => (
+                                      <option key={skill.id} value={skill.name}>{skill.name}</option>
+                                    ))}
+                                  </select>
+
+                                  <div className="hf-row-tight">
+                                    <button className="btn" onClick={() => runAgent(item.id)}>Run Agent</button>
+                                    <button className="btn ghost" onClick={() => removeActionItem(item.id)}>Delete</button>
+                                  </div>
+
+                                  <div className="hf-log-box">
+                                    {item.agent.log.length ? (
+                                      item.agent.log.slice(-3).map((entry) => (
+                                        <p key={entry.id}><span>{formatClock(entry.time)}</span> {entry.text}</p>
+                                      ))
+                                    ) : (
+                                      <p>No activity yet.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </article>
+                          ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <div className="hf-gallery">
+                  {filteredItems.map((item) => (
+                    <article key={item.id} className="hf-gallery-card" onClick={() => { setSelectedItemId(item.id); setDetailTab("overview"); }}>
+                      <img src={item.imageUrl || fallbackImage(item.projectTag)} alt={item.title} loading="lazy" />
+                      <div className="hf-gallery-meta">
+                        <strong>{item.title}</strong>
+                        <span className="hf-tag">{item.projectTag || "General"}</span>
+                        {item.agent?.status === "running" ? <span className="hf-agent-active">Agent Running</span> : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </article>
           </section>
         )}
 
-        {section === "timeline" && (
-          <section className="section active">
-            <div className="grid two">
-              <article className="panel">
-                <h3>Gantt</h3>
-                <div className="gantt">
-                  {renderGanttRows(state.tasks)}
-                </div>
-              </article>
-              <article className="panel">
-                <h3>Roadmap</h3>
-                <div className="roadmap">
-                  {milestones.length ? milestones.map((item) => (
-                    <div key={item.id} className="item"><strong>{item.title}</strong><br /><span className="muted">{item.dueDate || "No date"} | {item.status}</span></div>
-                  )) : <p className="muted">No roadmap milestones yet.</p>}
-                </div>
-              </article>
-            </div>
-          </section>
-        )}
-
         {section === "calendar" && (
-          <section className="section active">
-            <article className="panel">
-              <div className="row-wrap">
-                <h3>Project Calendar</h3>
-                <div>
+          <section className="hf-section">
+            <article className="hf-panel">
+              <div className="hf-row">
+                <h3>Calendar (Deadlines)</h3>
+                <div className="hf-row-tight">
                   <button className="btn ghost" onClick={() => setMonthView(new Date(monthView.getFullYear(), monthView.getMonth() - 1, 1))}>Prev</button>
                   <button className="btn ghost" onClick={() => setMonthView(new Date(monthView.getFullYear(), monthView.getMonth() + 1, 1))}>Next</button>
                 </div>
               </div>
+
               <p className="muted">{monthView.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</p>
-              <div className="month-grid-head"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-              <div className="month-grid">
+
+              <div className="hf-calendar-head">
+                <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+              </div>
+              <div className="hf-calendar-grid">
                 {calendarCells.map((cell) => (
-                  <div key={`${cell.key}-${cell.date.getDate()}`} className="day-cell">
-                    <span className="day-num">{cell.date.getDate()}</span>
-                    {cell.tasks.map((task) => <span key={task.id} className="day-task">{task.title}</span>)}
+                  <div key={`${cell.key}-${cell.date.getDate()}`} className="hf-day">
+                    <span className="hf-day-num">{cell.date.getDate()}</span>
+                    {cell.items.slice(0, 3).map((item) => (
+                      <button key={item.id} className="hf-day-item" onClick={() => { setSection("boards"); setSelectedItemId(item.id); setDetailTab("overview"); }}>
+                        {item.title}
+                      </button>
+                    ))}
                   </div>
                 ))}
               </div>
@@ -976,231 +1019,285 @@ export default function Page() {
           </section>
         )}
 
-        {section === "docs" && (
-          <section className="section active">
-            <div className="grid two">
-              <article className="panel">
-                <h3>Documents</h3>
-                <form className="inline-form" onSubmit={addDocument}>
-                  <input required placeholder="Document name" value={docForm.name} onChange={(e) => setDocForm({ ...docForm, name: e.target.value })} />
-                  <input required placeholder="File URL or path" value={docForm.url} onChange={(e) => setDocForm({ ...docForm, url: e.target.value })} />
-                  <button className="btn" type="submit">Add Document</button>
-                </form>
-                <div className="inline-form">
+        {section === "agent-hub" && (
+          <section className="hf-section">
+            <div className="hf-grid-two">
+              <article className="hf-panel">
+                <h3>OpenClaw Status</h3>
+                <p className="muted">Connection is {state.openClaw.url && state.openClaw.token ? "configured" : "not configured"}.</p>
+                <label className="hf-field-label">OpenClaw URL</label>
+                <input
+                  value={state.openClaw.url}
+                  onChange={(event) => setState((prev) => ({ ...prev, openClaw: { ...prev.openClaw, url: event.target.value } }))}
+                  placeholder="https://agents.yourdomain"
+                />
+                <label className="hf-field-label">Token</label>
+                <input
+                  type="password"
+                  value={state.openClaw.token}
+                  onChange={(event) => setState((prev) => ({ ...prev, openClaw: { ...prev.openClaw, token: event.target.value } }))}
+                  placeholder="ocw_..."
+                />
+                <div className="hf-row-tight">
+                  <button className="btn" onClick={saveOpenClaw}>Save OpenClaw</button>
+                  <button className="btn ghost" onClick={syncToSupabase} disabled={syncLoading}>{syncLoading ? "Syncing..." : "Sync Cloud"}</button>
+                  <button className="btn ghost" onClick={loadFromSupabase} disabled={syncLoading}>Load Cloud</button>
+                </div>
+              </article>
+
+              <article className="hf-panel">
+                <h3>Skill Management</h3>
+                <form className="hf-stack" onSubmit={addSkill}>
                   <input
-                    type="file"
-                    onChange={(event) => setDocFile(event.target.files?.[0] || null)}
+                    value={skillForm.name}
+                    onChange={(event) => setSkillForm((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Skill name"
+                    required
                   />
-                  <button className="btn ghost" type="button" onClick={uploadDocumentToStorage} disabled={uploadingDoc}>
+                  <textarea
+                    rows={2}
+                    value={skillForm.description}
+                    onChange={(event) => setSkillForm((prev) => ({ ...prev, description: event.target.value }))}
+                    placeholder="Skill description"
+                  />
+                  <button className="btn" type="submit">Add Skill</button>
+                </form>
+
+                <ul className="hf-list">
+                  {state.agentSkills.map((skill) => (
+                    <li key={skill.id} className="hf-item">
+                      <strong>{skill.name}</strong>
+                      <span className="muted">{skill.description}</span>
+                      <button className="hf-mini-link" onClick={() => removeSkill(skill.id)}>Remove</button>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+          </section>
+        )}
+
+        {section === "vault" && (
+          <section className="hf-section">
+            <div className="hf-grid-two">
+              <article className="hf-panel">
+                <h3>Documents</h3>
+                <form className="hf-stack" onSubmit={addDocumentLink}>
+                  <input
+                    value={documentForm.name}
+                    onChange={(event) => setDocumentForm((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Document name"
+                    required
+                  />
+                  <input
+                    value={documentForm.url}
+                    onChange={(event) => setDocumentForm((prev) => ({ ...prev, url: event.target.value }))}
+                    placeholder="Document URL"
+                    required
+                  />
+                  <button className="btn" type="submit">Add Link</button>
+                </form>
+
+                <div className="hf-stack">
+                  <input type="file" onChange={(event) => setDocFile(event.target.files?.[0] || null)} />
+                  <button className="btn ghost" onClick={uploadDocumentToStorage} disabled={uploadingDoc}>
                     {uploadingDoc ? "Uploading..." : "Upload to Storage"}
                   </button>
                 </div>
-                <ul className="list">
+
+                <ul className="hf-list">
                   {state.documents.length ? state.documents.map((doc) => (
-                    <li key={doc.id} className="item"><strong>{doc.name}</strong><br /><a href={doc.url} target="_blank" rel="noreferrer">{doc.url}</a></li>
-                  )) : <li className="item">No documents yet.</li>}
+                    <li key={doc.id} className="hf-item">
+                      <strong>{doc.name}</strong>
+                      <a href={doc.url} target="_blank" rel="noreferrer">{doc.url}</a>
+                    </li>
+                  )) : <li className="hf-item">No documents yet.</li>}
                 </ul>
               </article>
 
-              <article className="panel">
+              <article className="hf-panel">
                 <h3>Wiki</h3>
-                <form className="stack-form" onSubmit={addWiki}>
-                  <input required placeholder="Wiki page title" value={wikiForm.title} onChange={(e) => setWikiForm({ ...wikiForm, title: e.target.value })} />
-                  <textarea rows={4} required placeholder="Notes, SOPs, decisions, runbooks..." value={wikiForm.content} onChange={(e) => setWikiForm({ ...wikiForm, content: e.target.value })} />
-                  <button className="btn" type="submit">Save Wiki Page</button>
-                </form>
-                <ul className="list">
-                  {state.wiki.length ? state.wiki.map((page) => (
-                    <li key={page.id} className="item"><strong>{page.title}</strong><br /><span className="muted">{page.content.slice(0, 160)}</span></li>
-                  )) : <li className="item">No wiki pages yet.</li>}
-                </ul>
-              </article>
-            </div>
-          </section>
-        )}
-
-        {section === "finance" && (
-          <section className="section active">
-            <div className="grid two">
-              <article className="panel">
-                <h3>Time Tracking</h3>
-                <form className="inline-form" onSubmit={logTime}>
-                  <select value={timeForm.taskId} onChange={(e) => setTimeForm({ ...timeForm, taskId: e.target.value })}>
-                    <option value="">Select task</option>
-                    {state.tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
-                  </select>
-                  <input type="date" required value={timeForm.date} onChange={(e) => setTimeForm({ ...timeForm, date: e.target.value })} />
-                  <input type="number" min="0.25" step="0.25" required placeholder="Hours" value={timeForm.hours} onChange={(e) => setTimeForm({ ...timeForm, hours: e.target.value })} />
-                  <input type="number" min="0" step="1" required placeholder="$/hour" value={timeForm.rate} onChange={(e) => setTimeForm({ ...timeForm, rate: e.target.value })} />
-                  <button className="btn" type="submit">Log Time</button>
-                </form>
-                <ul className="list">
-                  {state.timeEntries.length ? state.timeEntries.map((entry) => {
-                    const task = state.tasks.find((t) => t.id === entry.taskId);
-                    return <li key={entry.id} className="item"><strong>{task?.title || "Unknown"}</strong><br /><span className="muted">{entry.date} | {entry.hours}h at ${entry.rate}/h</span></li>;
-                  }) : <li className="item">No time logged yet.</li>}
-                </ul>
-              </article>
-
-              <article className="panel">
-                <h3>Cost Tracking & Budgets</h3>
-                <form className="inline-form" onSubmit={upsertProject}>
-                  <input required placeholder="Project name" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
-                  <input type="number" min="0" step="100" required placeholder="Budget" value={projectForm.budget} onChange={(e) => setProjectForm({ ...projectForm, budget: e.target.value })} />
-                  <select value={projectForm.health} onChange={(e) => setProjectForm({ ...projectForm, health: e.target.value })}><option>Green</option><option>Yellow</option><option>Red</option></select>
-                  <button className="btn" type="submit">Upsert Project</button>
-                </form>
-                <div>
-                  <div className="item"><strong>Total Budget:</strong> ${state.projects.reduce((sum, p) => sum + Number(p.budget || 0), 0).toLocaleString()}</div>
-                  <div className="item"><strong>Spent:</strong> ${Math.round(totalCost).toLocaleString()}</div>
-                </div>
-              </article>
-            </div>
-          </section>
-        )}
-
-        {section === "portfolio" && (
-          <section className="section active">
-            <article className="panel">
-              <h3>Portfolio Overview</h3>
-              <div className="cards">
-                {state.projects.length ? state.projects.map((project) => {
-                  const used = project.budget ? Math.min(100, (totalCost / Number(project.budget)) * 100) : 0;
-                  return <article key={project.id} className="item"><strong>{project.name}</strong><br /><span className="muted">Health: {project.health} | Budget: ${Number(project.budget).toLocaleString()} | Used: {used.toFixed(1)}%</span></article>;
-                }) : <article className="item">No projects yet.</article>}
-              </div>
-            </article>
-          </section>
-        )}
-
-        {section === "agents" && (
-          <section className="section active">
-            <div className="grid two">
-              <article className="panel">
-                <h3>AI Agent Users</h3>
-                <form className="inline-form" onSubmit={addAgent}>
-                  <input required placeholder="Agent name" value={agentForm.name} onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })} />
-                  <input required placeholder="Skills (comma-separated)" value={agentForm.skills} onChange={(e) => setAgentForm({ ...agentForm, skills: e.target.value })} />
-                  <select value={agentForm.status} onChange={(e) => setAgentForm({ ...agentForm, status: e.target.value })}><option>Available</option><option>Busy</option><option>Offline</option></select>
-                  <button className="btn" type="submit">Add Agent</button>
-                </form>
-                <ul className="list">
-                  {state.agents.length ? state.agents.map((agent) => (
-                    <li key={agent.id} className="item"><strong>{agent.name}</strong><br /><span className="muted">{agent.skills.join(", ")} | {agent.status} | Load {agent.load}%</span></li>
-                  )) : <li className="item">No agents added.</li>}
-                </ul>
-              </article>
-
-              <article className="panel">
-                <h3>Agent Command Center</h3>
-                <p className="muted">Assign work packages to AI agents for planning, marketing, research, scheduling, and execution support.</p>
-                <form className="inline-form" onSubmit={assignAgent}>
-                  <select value={assignment.taskId} onChange={(e) => setAssignment({ ...assignment, taskId: e.target.value })}>
-                    <option value="">Select task</option>
-                    {state.tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
-                  </select>
-                  <select value={assignment.agentId} onChange={(e) => setAssignment({ ...assignment, agentId: e.target.value })}>
-                    <option value="">Select agent</option>
-                    {state.agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-                  </select>
-                  <button className="btn" type="submit">Assign</button>
-                </form>
-                <div className="ops-box">
-                  {state.tasks.filter((task) => state.agents.some((agent) => agent.name === task.assignee)).length ? (
-                    state.tasks
-                      .filter((task) => state.agents.some((agent) => agent.name === task.assignee))
-                      .map((task) => <div key={task.id} className="item"><strong>{task.title}</strong><br /><span className="muted">Assigned to {task.assignee} ({task.status})</span></div>)
-                  ) : <div className="item">No tasks currently assigned to AI agents.</div>}
-                </div>
-
-                <hr className="divider" />
-                <h3>Gemini Flash 2.5</h3>
-                <form className="stack-form" onSubmit={runGemini}>
-                  <select value={aiContext} onChange={(event) => setAiContext(event.target.value)}>
-                    <option value="planning">Planning</option>
-                    <option value="marketing">Marketing</option>
-                    <option value="scheduling">Scheduling</option>
-                    <option value="research">Research</option>
-                  </select>
-                  <textarea
-                    rows={4}
-                    placeholder="Ask Gemini to plan a sprint, draft campaign strategy, estimate schedule, or research competitors."
-                    value={aiPrompt}
-                    onChange={(event) => setAiPrompt(event.target.value)}
+                <form className="hf-stack" onSubmit={addWikiPage}>
+                  <input
+                    value={wikiForm.title}
+                    onChange={(event) => setWikiForm((prev) => ({ ...prev, title: event.target.value }))}
+                    placeholder="Page title"
                     required
                   />
-                  <button className="btn" type="submit" disabled={aiLoading}>
-                    {aiLoading ? "Thinking..." : "Run Gemini"}
-                  </button>
+                  <textarea
+                    rows={4}
+                    value={wikiForm.content}
+                    onChange={(event) => setWikiForm((prev) => ({ ...prev, content: event.target.value }))}
+                    placeholder="Notes, SOP, decisions"
+                    required
+                  />
+                  <button className="btn" type="submit">Save Wiki Page</button>
                 </form>
-                {aiError ? <div className="item error">{aiError}</div> : null}
-                {aiResult ? <div className="item ai-result"><pre>{aiResult}</pre></div> : null}
+
+                <ul className="hf-list">
+                  {state.wiki.length ? state.wiki.map((page) => (
+                    <li key={page.id} className="hf-item">
+                      <strong>{page.title}</strong>
+                      <span className="muted">{page.content.slice(0, 220)}</span>
+                    </li>
+                  )) : <li className="hf-item">No wiki pages yet.</li>}
+                </ul>
               </article>
             </div>
           </section>
         )}
       </main>
+
+      {selectedItem ? (
+        <aside className="hf-detail-drawer">
+          <header className="hf-detail-head">
+            <h3>{selectedItem.title}</h3>
+            <button className="hf-mini-link" onClick={() => setSelectedItemId("")}>Close</button>
+          </header>
+
+          <div className="hf-detail-tabs">
+            <button className={detailTab === "overview" ? "active" : ""} onClick={() => setDetailTab("overview")}>Overview</button>
+            <button className={detailTab === "agent" ? "active" : ""} onClick={() => setDetailTab("agent")}>Agent Output</button>
+            <button className={detailTab === "advanced" ? "active" : ""} onClick={() => setDetailTab("advanced")}>Advanced</button>
+          </div>
+
+          {detailTab === "overview" ? (
+            <div className="hf-detail-body">
+              <label className="hf-field-label">Title</label>
+              <input value={selectedItem.title} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.title = event.target.value; })} />
+
+              <label className="hf-field-label">Project Tag</label>
+              <input value={selectedItem.projectTag} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.projectTag = event.target.value; })} />
+
+              <div className="hf-grid-two-compact">
+                <div>
+                  <label className="hf-field-label">Status</label>
+                  <select value={selectedItem.status} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.status = event.target.value; })}>
+                    {STATUS_COLUMNS.map((status) => <option key={status}>{status}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="hf-field-label">Priority</label>
+                  <select value={selectedItem.priority} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.priority = event.target.value; })}>
+                    {PRIORITY_LEVELS.map((priority) => <option key={priority}>{priority}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="hf-grid-two-compact">
+                <div>
+                  <label className="hf-field-label">Due Date</label>
+                  <input type="date" value={selectedItem.dueDate || ""} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.dueDate = event.target.value; })} />
+                </div>
+                <div>
+                  <label className="hf-field-label">Assignee</label>
+                  <input value={selectedItem.assignee || ""} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.assignee = event.target.value; })} />
+                </div>
+              </div>
+
+              <label className="hf-field-label">Image URL (Gallery preview)</label>
+              <input value={selectedItem.imageUrl || ""} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.imageUrl = event.target.value; })} />
+
+              <label className="hf-field-label">Description</label>
+              <textarea rows={4} value={selectedItem.description || ""} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.description = event.target.value; })} />
+            </div>
+          ) : null}
+
+          {detailTab === "agent" ? (
+            <div className="hf-detail-body">
+              <label className="hf-field-label">Assign to Agent Skill</label>
+              <select
+                value={selectedItem.agent.skill || ""}
+                onChange={(event) => assignSkill(selectedItem.id, event.target.value)}
+              >
+                <option value="">Select skill</option>
+                {state.agentSkills.map((skill) => (
+                  <option key={skill.id} value={skill.name}>{skill.name}</option>
+                ))}
+              </select>
+
+              <button className="btn" onClick={() => runAgent(selectedItem.id)}>Run Agent</button>
+
+              <section className="hf-live-terminal">
+                <h4>Live Activity Log</h4>
+                {selectedItem.agent.log.length ? (
+                  selectedItem.agent.log.slice(-12).map((entry) => (
+                    <p key={entry.id}><span>{formatClock(entry.time)}</span> {entry.text}</p>
+                  ))
+                ) : (
+                  <p>No activity yet.</p>
+                )}
+              </section>
+
+              <section className="hf-output-box">
+                <h4>Agent Output</h4>
+                <textarea
+                  rows={10}
+                  value={selectedItem.agent.output || ""}
+                  onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.agent.output = event.target.value; })}
+                  placeholder="Agent findings, drafts, and links will appear here."
+                />
+              </section>
+            </div>
+          ) : null}
+
+          {detailTab === "advanced" ? (
+            <div className="hf-detail-body">
+              <div className="hf-grid-two-compact">
+                <div>
+                  <label className="hf-field-label">Estimate (hours)</label>
+                  <input type="number" min="0" step="0.5" value={selectedItem.advanced.estimateHours || 0} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.advanced.estimateHours = Number(event.target.value || 0); })} />
+                </div>
+                <div>
+                  <label className="hf-field-label">Cost Rate ($/hr)</label>
+                  <input type="number" min="0" step="1" value={selectedItem.advanced.costRate || 0} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.advanced.costRate = Number(event.target.value || 0); })} />
+                </div>
+              </div>
+
+              <div className="hf-grid-two-compact">
+                <div>
+                  <label className="hf-field-label">Budget Cap ($)</label>
+                  <input type="number" min="0" step="10" value={selectedItem.advanced.budgetCap || 0} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.advanced.budgetCap = Number(event.target.value || 0); })} />
+                </div>
+                <div>
+                  <label className="hf-field-label">Portfolio Tag</label>
+                  <input value={selectedItem.advanced.portfolioTag || ""} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.advanced.portfolioTag = event.target.value; })} />
+                </div>
+              </div>
+
+              <div className="hf-grid-two-compact">
+                <div>
+                  <label className="hf-field-label">Workload</label>
+                  <select value={selectedItem.advanced.workload || "Low"} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.advanced.workload = event.target.value; })}>
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="hf-field-label">Risk Level</label>
+                  <select value={selectedItem.advanced.riskLevel || "Low"} onChange={(event) => updateActionItem(selectedItem.id, (item) => { item.advanced.riskLevel = event.target.value; })}>
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <aside className="hf-properties-sidebar">
+            <details>
+              <summary>Properties</summary>
+              <p className="muted">Custom attributes are hidden from the board and managed here.</p>
+              <textarea rows={6} value={customAttrsText} onChange={(event) => setCustomAttrsText(event.target.value)} placeholder="client:Acme\nphase:Beta" />
+              <button className="btn ghost" onClick={saveCustomProperties}>Save Properties</button>
+            </details>
+          </aside>
+        </aside>
+      ) : null}
     </div>
   );
-}
-
-function renderGanttRows(tasks) {
-  const dated = tasks.filter((task) => task.startDate && task.dueDate).sort((a, b) => a.startDate.localeCompare(b.startDate));
-  if (!dated.length) return <p className="muted">Add start and due dates to show Gantt bars.</p>;
-
-  const minDate = new Date(dated[0].startDate);
-  const maxDate = new Date(Math.max(...dated.map((task) => new Date(task.dueDate).getTime())));
-  const totalSpan = Math.max(1, dayDiff(minDate, maxDate));
-
-  return dated.map((task) => {
-    const left = (dayDiff(minDate, new Date(task.startDate)) / totalSpan) * 100;
-    const width = (Math.max(1, dayDiff(new Date(task.startDate), new Date(task.dueDate))) / totalSpan) * 100;
-    return (
-      <div key={task.id} className="gantt-row">
-        <strong>{task.title}</strong><br />
-        <span className="muted">{task.startDate} -&gt; {task.dueDate}</span>
-        <div className="gantt-bar-wrap"><div className="gantt-bar" style={{ marginLeft: `${left}%`, width: `${Math.min(width, 100 - left)}%` }} /></div>
-      </div>
-    );
-  });
-}
-
-function formatAttrs(attrs) {
-  const entries = Object.entries(attrs || {});
-  if (!entries.length) return <span className="muted">none</span>;
-  return entries.map(([key, value]) => <span key={key} className="badge">{key}:{String(value)}</span>);
-}
-
-function parseCustomAttrs(raw) {
-  if (!raw.trim()) return {};
-  return raw
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .reduce((acc, pair) => {
-      const [k, ...rest] = pair.split(":");
-      if (!k || !rest.length) return acc;
-      acc[k.trim()] = rest.join(":").trim();
-      return acc;
-    }, {});
-}
-
-function keyFromDate(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function keyForOffset(days) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return keyFromDate(date);
-}
-
-function dayDiff(start, end) {
-  return Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-}
-
-function titleCase(value) {
-  return value.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 async function replaceWorkspaceRows(supabase, tableName, rows) {
@@ -1211,16 +1308,69 @@ async function replaceWorkspaceRows(supabase, tableName, rows) {
   if (insertResult.error) throw insertResult.error;
 }
 
+function parseCustomAttrs(raw) {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .reduce((acc, line) => {
+      const [key, ...rest] = line.split(":");
+      if (!key || !rest.length) return acc;
+      acc[key.trim()] = rest.join(":").trim();
+      return acc;
+    }, {});
+}
+
+function formatCustomAttrs(attrs) {
+  const entries = Object.entries(attrs || {});
+  return entries.map(([key, value]) => `${key}:${String(value)}`).join("\n");
+}
+
+function asObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function keyFromDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function dateOffset(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return keyFromDate(date);
+}
+
+function isDueWithinDays(dateKey, days) {
+  if (!dateKey) return false;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const due = new Date(dateKey).getTime();
+  if (Number.isNaN(due)) return false;
+  const diff = Math.round((due - today) / (1000 * 60 * 60 * 24));
+  return diff >= 0 && diff <= days;
+}
+
+function titleCase(value) {
+  return value.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function toStatusClass(status) {
+  return status.toLowerCase().replace(/\s+/g, "-");
+}
+
+function formatClock(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 function sanitizeFileName(value) {
   return value.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-");
 }
 
-function stableIdFromText(input) {
-  const encoded = new TextEncoder().encode(input);
-  let hash = 0;
-  for (const byte of encoded) {
-    hash = (hash << 5) - hash + byte;
-    hash |= 0;
-  }
-  return `board-${Math.abs(hash)}`;
+function fallbackImage(tag) {
+  const safe = encodeURIComponent(tag || "project");
+  return `https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80&sig=${safe.length}`;
 }

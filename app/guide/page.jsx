@@ -1,81 +1,66 @@
 export const metadata = {
   title: "Hustle Flow User Guide",
-  description: "Feature list and usage guide for Hustle Flow",
+  description: "Simplified workflow guide for Hustle Flow",
 };
 
 const features = [
-  "Work Packages: tasks, bugs, features, risks with custom attributes, priorities, statuses, assignees, milestones",
-  "Agile Boards: unlimited boards with drag-and-drop Kanban workflow",
-  "Views: table, calendar, gallery task views with filtering and sorting",
-  "Timeline: Gantt-style scheduling and roadmap milestone tracking",
-  "Project Calendar: month view of due dates and deadlines",
-  "Documents + Wiki: centralized references and project knowledge pages",
-  "Time + Cost Tracking: log time, rates, and monitor budget usage",
-  "Portfolio Overview: high-level health and budget visibility across projects",
-  "AI Agents: create agent users, assign tasks, monitor load",
-  "Gemini Integration: built-in AI assistant panel for planning/marketing/scheduling/research",
-  "Supabase Integration: sync app data to PostgreSQL tables and upload files to Storage",
-  "Self-hosted Ready: run with Next.js on your own infrastructure",
+  "Action Items: one unified entity for tasks, bugs, features, and risks",
+  "Boards: roomy Kanban and visual Gallery with card-first design",
+  "Calendar: deadline-only month view",
+  "Agent Hub: OpenClaw status, credential storage, and skill management",
+  "Vault: documents and wiki knowledge base",
+  "Task Detail Drawer with tabs: Overview, Agent Output, Advanced",
+  "Properties sidebar: custom attributes kept out of board clutter",
+  "Agent Slot in every card: Assign to Agent Skill + Run Agent",
+  "Live Activity Log + Agent Output embedded in task context",
+  "Optimistic drag-and-drop card movement for instant board updates",
+  "Modern dark UI with high-contrast status/priority signals",
+  "Mobile-friendly single-column Kanban layout",
 ];
 
-const gettingStarted = [
-  "Install dependencies: npm install",
-  "Configure .env.local (Gemini + Supabase keys)",
-  "Run development server: npm run dev",
-  "Open http://localhost:3000",
-  "Apply template or create your first work package",
-  "Create at least one board and move tasks through statuses",
-  "Sync Supabase to persist data server-side",
+const sidebarMap = [
+  "Dashboard",
+  "Boards",
+  "Calendar",
+  "Agent Hub",
+  "Vault",
 ];
 
-const workflows = [
-  {
-    title: "Daily workflow",
-    steps: [
-      "Open Dashboard to review workload, milestones, and tracked costs",
-      "Use Work Packages to add or update tasks with due dates and priorities",
-      "Use Agile Boards to move work from Backlog to Done",
-      "Log effort in Time + Cost",
-      "Push updates using Sync Supabase",
-    ],
-  },
-  {
-    title: "Release planning",
-    steps: [
-      "Mark key tasks as Milestones",
-      "Set start and due dates for schedule visibility",
-      "Review Gantt and Roadmap sections",
-      "Use Calendar view to validate deadline distribution",
-      "Use Gemini panel to generate release checklists and risk plans",
-    ],
-  },
-  {
-    title: "Document management",
-    steps: [
-      "Add document links manually in Documents",
-      "Upload files with Upload to Storage",
-      "Create wiki entries for SOPs, project decisions, and runbooks",
-      "Load Supabase from another device/session to continue where you left off",
-    ],
-  },
+const quickStart = [
+  "Open Boards and create your first Action Item",
+  "Set project tag and deadline",
+  "Switch between Kanban and Gallery views",
+  "Open an Action Item, assign an Agent Skill, and run the agent",
+  "Review Agent Output and save decisions into Vault Wiki",
+  "Use Calendar to verify upcoming due dates",
+  "Use Sync Cloud in the top bar or Agent Hub when needed",
 ];
 
 export default function GuidePage() {
   return (
     <main className="guide-page">
       <div className="guide-wrap">
-        <header className="guide-hero panel">
+        <header className="guide-hero hf-panel">
           <h1>Hustle Flow User Guide</h1>
           <p className="muted">
-            This guide covers what Hustle Flow does, how to use each core feature, and the standard flow for solo founders running project operations with AI support.
+            Hustle Flow is intentionally simplified for solo operators: fewer routes, clearer cards, and agent actions embedded directly in task context.
           </p>
-          <div className="actions">
+          <div className="hf-actions">
             <a className="btn" href="/">Open App</a>
-            <a className="btn ghost" href="/#agents">Jump to AI Agents</a>
+            <a className="btn ghost" href="/">Back to Dashboard</a>
           </div>
         </header>
 
-        <section className="panel">
+        <section className="hf-panel">
+          <h2>Sidebar Structure</h2>
+          <ol className="guide-list ordered">
+            {sidebarMap.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="hf-panel">
           <h2>Feature List</h2>
           <ul className="guide-list">
             {features.map((item) => (
@@ -84,38 +69,13 @@ export default function GuidePage() {
           </ul>
         </section>
 
-        <section className="panel">
-          <h2>Getting Started</h2>
-          <ol className="guide-list ordered">
-            {gettingStarted.map((item) => (
+        <section className="hf-panel">
+          <h2>Quick Start</h2>
+          <ol className="guide-list ordered compact">
+            {quickStart.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ol>
-        </section>
-
-        <section className="panel">
-          <h2>Core Workflows</h2>
-          <div className="guide-grid">
-            {workflows.map((flow) => (
-              <article key={flow.title} className="item">
-                <h3>{flow.title}</h3>
-                <ol className="guide-list ordered compact">
-                  {flow.steps.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel">
-          <h2>Supabase + Storage Notes</h2>
-          <ul className="guide-list">
-            <li>Use the top bar buttons in the app: <strong>Sync Supabase</strong> and <strong>Load Supabase</strong>.</li>
-            <li>Run the schema from <code>/Users/coreyralston/Documents/New project/supabase/schema.sql</code> first.</li>
-            <li>Use the Documents section for file upload to the <code>documents</code> bucket.</li>
-          </ul>
         </section>
       </div>
     </main>

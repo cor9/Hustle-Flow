@@ -1,78 +1,60 @@
-# Hustle Flow (Next.js)
+# Hustle Flow (Simplified Next.js)
 
-Hustle Flow is a Next.js web app for solopreneur project operations with AI-agent-assisted workflows.
+Hustle Flow is a streamlined solo-operator project cockpit with a card-first board, deadline calendar, OpenClaw skill execution, and a lightweight document vault.
 
-## Stack
-- Next.js App Router
-- React
-- Supabase (Postgres tables + Storage bucket)
-- CSS global design system
+## Core navigation
+1. Dashboard
+2. Boards
+3. Calendar
+4. Agent Hub
+5. Vault
 
-## Features in this build
-- Work Packages with custom attributes, statuses, priorities
-- Kanban boards with drag-and-drop status moves
-- Table / Calendar / Gallery views
-- Gantt timeline + Roadmap milestones
-- Project calendar
-- Documents + Wiki
-- Time tracking, cost tracking, budgets
-- Portfolio overview
-- AI agent roster + task assignment
-- Gemini Flash 2.5 integration (`/api/ai`)
-- Supabase sync/load for app tables
-- Supabase Storage upload for Documents
+## Feature list
+- **Action Items** (single unified entity for tasks/work items)
+- **Kanban + Gallery Boards**
+- **Card-first UI** with minimal surface info and expandable details
+- **Task Detail Drawer** with tabs: Overview, Agent Output, Advanced
+- **Properties Sidebar** (custom attributes hidden from main board)
+- **OpenClaw Skill Slot** on every Action Item
+- **Run Agent** with in-task live activity log + output area
+- **Deadline-only Calendar**
+- **Vault** for Documents + Wiki
+- **Optimistic drag/drop** board movement
+- **Supabase sync/load** and Storage uploads (optional)
 
-## Run locally
-1. Install dependencies:
+## OpenClaw endpoint contract
+- `Run Agent` attempts:
+  - `POST <OPENCLAW_URL>/api/skills/run`
+- Headers:
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- Body:
+  - `{ skill, task: { id, title, projectTag, description, customAttrs, advanced } }`
+- Expected response:
+  - `{ logs: string[], output: string }` (or `result` as fallback)
+- If unavailable, Hustle Flow falls back to local simulated execution logs/output.
+
+## Local run
 ```bash
 npm install
-```
-
-2. Copy environment template:
-```bash
 cp .env.example .env.local
+npm run dev
 ```
 
-3. Fill `.env.local`:
+Open [http://localhost:3000](http://localhost:3000)
+
+## Environment variables
 ```bash
 GEMINI_API_KEY=your_gemini_key_here
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
-# Optional fallbacks:
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_SUPABASE_ANON_LEGACY_KEY=your_supabase_legacy_anon_key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_optional
+NEXT_PUBLIC_SUPABASE_ANON_LEGACY_KEY=your_supabase_legacy_anon_key_optional
 SUPABASE_DB_URL=postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres
 SUPABASE_DB_PASSWORD=your_supabase_db_password
 ```
 
-4. Start dev server:
-```bash
-npm run dev
-```
-
-5. Open [http://localhost:3000](http://localhost:3000)
-
 ## Supabase setup
-1. Create a Supabase project.
-2. Open SQL Editor and run:
-- `/Users/coreyralston/Documents/New project/supabase/schema.sql`
-3. Confirm bucket `documents` exists (created by SQL).
-4. In the app top bar:
-- `Sync Supabase`: pushes local state into Supabase tables.
-- `Load Supabase`: pulls Supabase tables into app state.
-5. In `Documents`, use `Upload to Storage` to upload files to the `documents` bucket and attach public URLs.
-
-## Build for production
-```bash
-npm run build
-npm run start
-```
-
-## Logo
-The app uses:
-- `/Users/coreyralston/Documents/New project/public/assets/hustle-flow-logo.png`
-
-## Notes
-- Local browser state is still persisted via localStorage.
-- Supabase integration currently uses public anon-key policies from `schema.sql` for rapid self-hosted MVP usage.
-- For production hardening, switch to authenticated RLS policies and per-user/workspace access control.
+- Run schema SQL: `/Users/coreyralston/Documents/New project/supabase/schema.sql`
+- Use **Sync Cloud** / **Load Cloud** in app
+- Use **Vault > Upload to Storage** for file upload to bucket `documents`
